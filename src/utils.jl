@@ -5,7 +5,7 @@ mutable struct SimpleAdjState <: AbstractAdjState
 end
 struct CachedAdjState <: AbstractAdjState
     js::Vector{Int}
-    CachedAdjState() = new([])
+    CachedAdjState() = new([1])
 end
 AdjState(cached::Bool) = cached ? SimpleAdjState() : CachedAdjState()
 increment!(adjstate::SimpleAdjState, Δj) = adjstate.j += Δj
@@ -25,16 +25,16 @@ value(adjstate::SimpleAdjState) = adjstate.j
 value(adjstate::CachedAdjState) = last(adjstate.js)
 
 
-
-function infer_types(rsys::RSSystem, v::T) where {T}
+function initialize_reducer_and_aggregator(rsys::RSSystem, v::T) where {T}
     @assert rsys.ls(v) isa T
     @assert rsys.adj(v, 1) isa Union{T, Nothing}
     @assert rsys.compare(v, v) == true
 
     has_rejector(rsys) && @assert rsys.rejector(v) isa RejectValue
 
-    red_type = has_reducer(rsys) ? typeof(rsys.reducer(v)) : Nothing
-    agg_type = has_aggregator(rsys) ? typeof(rsys.aggregator(v)[2]) : Nothing
-    return red_type, agg_type
+    reduce_val = has_reducer(rsys) ? zero(typeof(rsys.reducer(v))) : nothing
+    aggregate_val = has_aggregator(rsys) ? Vector{typeof(rsys.aggregator(v)[2])}() : nothing
+
+    return reduce_val, aggregate_val
 end
 

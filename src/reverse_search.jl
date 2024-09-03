@@ -17,20 +17,19 @@ isinplace(::RSSystem{inplace}) where {inplace} = inplace
 @enum RSResult rs_success=0 rs_maxvertreached=1 rs_maxdepthreached=2 rs_breaktriggered=3
 
 function reversesearch(rsys::RSSystem, v₀; max_depth, break_depth, max_vertices, path_cache)
-    red_type, agg_type = infer_types(rsystem, v₀)
-    has_reducer(rsys) && reduce_val = zero(red_type)
-    has_aggregator(rsys) && aggregate_val = agg_type[]
-
     nv = 0
     depth = 0
     lowest_depth = depth
+    reduce_val, aggregate_val = initialize_reducer_and_aggregator(rsys, v₀)
 
-    if isinplace(rsys)
-        return rs_inplace(rsys, v₀, reduce_val, aggregate_val, nv, depth, lowest_depth, max_depth, break_depth, max_vertices, Val(path_cache))
+    if !isinplace(rsys)
+        return rs_noinplace(rsys, v₀, reduce_val, aggregate_val, nv, depth, lowest_depth, max_depth, break_depth, max_vertices, Val(path_cache))
+    else
+        error("inplace reversesearch not implemented yet")
     end
 end
 
-function rs_inplace(rsys::RSSystem, 
+function rs_noinplace(rsys::RSSystem, 
     v₀, 
     reduce_val, 
     aggregate_val, 
@@ -43,7 +42,6 @@ function rs_inplace(rsys::RSSystem,
     ::Val{path_cache}) where {path_cache}
 
     v = v₀
-    next = zero(v)
     j = AdjState(path_cache)
 
     while true
