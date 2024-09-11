@@ -1,4 +1,4 @@
-struct RSSystem{isinplace, LS, ADJ, COM, REJ, RED, ROP, AGR}
+struct RSSystem{isinplace,LS,ADJ,COM,REJ,RED,ROP,AGR}
     ls::LS              # local search, ls(v)
     adj::ADJ            # adjacency oracle, adj(v, j)
     compare::COM        # comparator between v, v' (default Base.:(==))
@@ -6,7 +6,7 @@ struct RSSystem{isinplace, LS, ADJ, COM, REJ, RED, ROP, AGR}
     reducer::RED        # 
     reduce_op::ROP
     aggregator::AGR     # aggregator(v, args...) = Bool, aggval
-    RSSystem{isinplace}(args...) where {isinplace} = new{isinplace, typeof.(args)...}(args...)
+    RSSystem{isinplace}(args...) where {isinplace} = new{isinplace,typeof.(args)...}(args...)
 end
 RSSystem{isinplace}(ls, adj) where {isinplace} = RSSystem{isinplace}(ls, adj, Base.:(==), nothing, nothing, Base.:+, nothing)
 has_rejector(rsys::RSSystem) = !isnothing(rsys.rejector)
@@ -14,7 +14,7 @@ has_reducer(rsys::RSSystem) = !isnothing(rsys.reducer)
 has_aggregator(rsys::RSSystem) = !isnothing(rsys.aggregator)
 isinplace(::RSSystem{inplace}) where {inplace} = inplace
 
-mutable struct RSState{VTY, NCT}
+mutable struct RSState{VTY,NCT}
     v::VTY
     _temp1::VTY # Only used for inplace assignments
     _temp2::VTY # Only used for inplace assignments
@@ -53,13 +53,13 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
 
         if isinplace
             rsys.ls(state._temp2, next)
-            !rsys.compare(state._temp2, state.v) && continue 
+            !rsys.compare(state._temp2, state.v) && continue
             copy!(state.v, next)
         else
-            !rsys.compare(rsys.ls(next), state.v) && continue 
+            !rsys.compare(rsys.ls(next), state.v) && continue
             state.v = next
         end
-                    
+
         state.depth += 1
         pushvertex!(state.counter)
         return true
@@ -100,8 +100,8 @@ restore!(neighcount::CachedNeighborCounter, args...) = pop!(neighcount.js)
 value(neighcount::SimpleNeighborCounter) = neighcount.j
 value(neighcount::CachedNeighborCounter) = last(neighcount.js)
 
-@enum RejectValue rs_noreject=0 rs_rejectpost=1 rs_rejectpre=2 rs_break=3
-@enum RSStatus rs_success=0 rs_maxvertreached=1 rs_maxdepthreached=2 rs_breaktriggered=3
+@enum RejectValue rs_noreject = 0 rs_rejectpost = 1 rs_rejectpre = 2 rs_break = 3
+@enum RSStatus rs_success = 0 rs_maxvertreached = 1 rs_maxdepthreached = 2 rs_breaktriggered = 3
 
 function reversesearch(rsys::RSSystem, v₀; max_depth=nothing, break_depth=nothing, max_vertices=nothing, cached=true)
     @assert isnothing(max_depth) || max_depth > 0
@@ -113,7 +113,7 @@ function reversesearch(rsys::RSSystem, v₀; max_depth=nothing, break_depth=noth
     break_triggered = false
     reduce_val, aggregate_val = initialize_reducer_and_aggregator(rsys, v₀)
     state = RSState(v₀, cached)
-    
+
     while true
         success = reverse_traverse!(state, rsys)
         if success
@@ -162,5 +162,5 @@ function reversesearch(rsys::RSSystem, v₀; max_depth=nothing, break_depth=noth
         result = rs_success
     end
 
-    return (;result, nv, lowest_depth, reduce_val, aggregate_val)
+    return (; result, nv, lowest_depth, reduce_val, aggregate_val)
 end
