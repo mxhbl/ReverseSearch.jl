@@ -66,7 +66,6 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
     end
 end
 
-#TODO: make this a reverse-search state and add the relevant vertices -> easy conversion between inplace/notinplace cached/notcached
 abstract type AbstractNeighborCounter end
 mutable struct SimpleNeighborCounter <: AbstractNeighborCounter
     j::Int
@@ -77,6 +76,7 @@ struct CachedNeighborCounter <: AbstractNeighborCounter
     js::Vector{Int}
 end
 CachedNeighborCounter() = CachedNeighborCounter([1])
+
 increment!(neighcount::SimpleNeighborCounter, Δj) = neighcount.j += Δj
 increment!(neighcount::CachedNeighborCounter, Δj) = neighcount.js[end] += Δj
 pushvertex!(neighcount::SimpleNeighborCounter) = neighcount.j = 1
@@ -95,7 +95,7 @@ function restore!(neighcount::SimpleNeighborCounter, rsys::RSSystem{isinplace}, 
     end
     neighcount.j = j
     return
-end 
+end
 restore!(neighcount::CachedNeighborCounter, args...) = pop!(neighcount.js)
 value(neighcount::SimpleNeighborCounter) = neighcount.j
 value(neighcount::CachedNeighborCounter) = last(neighcount.js)
