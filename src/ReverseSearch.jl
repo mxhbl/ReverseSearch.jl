@@ -2,7 +2,7 @@ module ReverseSearch
 
 export RSSystem, reversesearch
 
-include("./utils.jl")
 include("./reverse_search.jl")
+include("./utils.jl")
 
 end

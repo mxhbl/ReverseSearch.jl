@@ -162,5 +162,5 @@ function reversesearch(rsys::RSSystem, v₀; max_depth=nothing, break_depth=noth
         result = rs_success
     end
 
-    return "result"=>result, "vertices"=>nv, "depth"=>lowest_depth, "reduce_val"=>reduce_val, "aggregate_val"=>aggregate_val
+    return (;result, nv, lowest_depth, reduce_val, aggregate_val)
 end
