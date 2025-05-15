@@ -8,7 +8,8 @@ struct RSSystem{isinplace,LS,ADJ,COM,REJ,RED,ROP,AGR}
     aggregator::AGR     # aggregator(v, args...) = Bool, aggval
     RSSystem{isinplace}(args...) where {isinplace} = new{isinplace,typeof.(args)...}(args...)
 end
-RSSystem{isinplace}(ls, adj) where {isinplace} = RSSystem{isinplace}(ls, adj, Base.:(==), nothing, nothing, Base.:+, nothing)
+RSSystem{isinplace}(ls, adj; compare=Base.:(==), rejector=nothing, reducer=nothing, reduce_op=Base.:+, aggregator=nothing) where {isinplace} = 
+    RSSystem{isinplace}(ls, adj, compare, rejector, reducer, reduce_op, aggregator)
 has_rejector(rsys::RSSystem) = !isnothing(rsys.rejector)
 has_reducer(rsys::RSSystem) = !isnothing(rsys.reducer)
 has_aggregator(rsys::RSSystem) = !isnothing(rsys.aggregator)
