@@ -8,7 +8,7 @@ function subgraphsearch(G)
         length(U) == 1 && return eltype(U)[]
 
         for v in U
-            V = setdiff(U, v); sort!(V)
+            V = sort!(setdiff(U, v))
             g = G[V]
             is_connected(g) && return V
         end
@@ -22,7 +22,7 @@ function subgraphsearch(G)
             while j in U; j += 1 end
             j > N && break
 
-            V = union(U, j); sort!(V)
+            V = sort!(union(U, j))
             g = G[V]
             j += 1
             is_connected(g) && return V, j - j₀
@@ -38,20 +38,32 @@ end
     G = path_graph(32)
     rsys = RSSystem{false}(subgraphsearch(G)...)
     result = reversesearch(rsys, Int[], cached=true)
-    @test result.nv == 1 + 32 * 33 // 2
+    @test result.nv == 1 + 32 * 33 ÷ 2
+
+    result = reversesearch(rsys, Int[], cached=false)
+    @test result.nv == 1 + 32 * 33 ÷ 2
 
     G = path_graph(100)
     rsys = RSSystem{false}(subgraphsearch(G)...)
     result = reversesearch(rsys, Int[], cached=true)
-    @test result.nv == 1 + 100 * 101 // 2
+    @test result.nv == 1 + 100 * 101 ÷ 2
+
+    result = reversesearch(rsys, Int[], cached=false)
+    @test result.nv == 1 + 100 * 101 ÷ 2
 
     G = complete_graph(5)
     rsys = RSSystem{false}(subgraphsearch(G)...)
     result = reversesearch(rsys, Int[], cached=true)
     @test result.nv == 2 ^ 5
 
+    result = reversesearch(rsys, Int[], cached=false)
+    @test result.nv == 2 ^ 5
+
     G = complete_graph(8)
     rsys = RSSystem{false}(subgraphsearch(G)...)
     result = reversesearch(rsys, Int[], cached=true)
+    @test result.nv == 2 ^ 8
+
+    result = reversesearch(rsys, Int[], cached=false)
     @test result.nv == 2 ^ 8
 end
