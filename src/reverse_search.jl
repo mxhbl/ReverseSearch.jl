@@ -1,18 +1,10 @@
-struct RSSystem{isinplace,LS,ADJ,COM,REJ,RED,ROP,AGR}
+struct RSSystem{isinplace,LS,ADJ,COM}
     ls::LS              # local search, ls(v)
     adj::ADJ            # adjacency oracle, adj(v, j)
-    compare::COM        # comparator between v, v' (default Base.:(==))
-    rejector::REJ       # rejector rejector(v) isa RejectValue
-    reducer::RED        # 
-    reduce_op::ROP
-    aggregator::AGR     # aggregator(v, args...) = Bool, aggval
+    compare::COM        # comparator between vertices v, v' (default Base.:(==))
     RSSystem{isinplace}(args...) where {isinplace} = new{isinplace,typeof.(args)...}(args...)
 end
-RSSystem{isinplace}(ls, adj; compare=Base.:(==), rejector=nothing, reducer=nothing, reduce_op=Base.:+, aggregator=nothing) where {isinplace} = 
-    RSSystem{isinplace}(ls, adj, compare, rejector, reducer, reduce_op, aggregator)
-has_rejector(rsys::RSSystem) = !isnothing(rsys.rejector)
-has_reducer(rsys::RSSystem) = !isnothing(rsys.reducer)
-has_aggregator(rsys::RSSystem) = !isnothing(rsys.aggregator)
+RSSystem{isinplace}(ls, adj; compare=Base.:(==)) where {isinplace} = RSSystem{isinplace}(ls, adj, compare)
 isinplace(::RSSystem{inplace}) where {inplace} = inplace
 
 mutable struct RSState{VTY,NCT}
@@ -22,7 +14,7 @@ mutable struct RSState{VTY,NCT}
     counter::NCT
     depth::Int
 end
-RSState(v, cached::Bool) = RSState(v, copy(v), copy(v), cached ? CachedNeighborCounter() : SimpleNeighborCounter(), 0)
+RSState(v, cached::Bool) = RSState(v, deepcopy(v), deepcopy(v), cached ? CachedNeighborCounter() : SimpleNeighborCounter(), 0)
 
 function forward_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isinplace}
     state.depth == 0 && return false
@@ -101,26 +93,35 @@ restore!(neighcount::CachedNeighborCounter, args...) = pop!(neighcount.js)
 value(neighcount::SimpleNeighborCounter) = neighcount.j
 value(neighcount::CachedNeighborCounter) = last(neighcount.js)
 
-@enum RejectValue rs_noreject = 0 rs_rejectpost = 1 rs_rejectpre = 2 rs_break = 3
-@enum RSStatus rs_success = 0 rs_maxvertreached = 1 rs_maxdepthreached = 2 rs_breaktriggered = 3
+@enum RejectValue NOREJECT = 0 REJECTPOST = 1 REJECTPRE = 2 BREAKPOST = 3 BREAKPRE = 4
+@enum RSStatus COMPLETE = 0 MAXVERTREACHED = 1 MAXDEPTHREACHED = 2 BREAKTRIGGERED = 3
 
-function reversesearch(rsys::RSSystem, v₀; max_depth=nothing, break_depth=nothing, max_vertices=nothing, cached=true)
-    @assert isnothing(max_depth) || max_depth > 0
-    @assert isnothing(break_depth) || break_depth > 0
-    @assert isnothing(max_vertices) || max_vertices > 0
+function reversesearch(rsys::RSSystem, v₀; cached=true, max_depth=nothing, max_vertices=nothing, callback=nothing, callback_args=nothing)
+    if isnothing(max_depth) || max_depth < 0
+        max_depth = typemax(Int)
+    end
+    if isnothing(max_vertices) || max_vertices < 0
+        max_vertices = typemax(Int)
+    end
+
+    has_callback = !isnothing(callback)
 
     nv = 1
     lowest_depth = 0
     break_triggered = false
-    reduce_val, aggregate_val = initialize_reducer_and_aggregator(rsys, v₀)
     state = RSState(v₀, cached)
 
     while true
         success = reverse_traverse!(state, rsys)
+
         if success
-            v = state.v
-            reject_val = has_rejector(rsys) ? rsys.rejector(v) : rs_noreject
-            if reject_val == rs_rejectpre
+            reject_val = has_callback ? callback(state, callback_args...) : NOREJECT
+
+            if reject_val == BREAKPRE
+                break_triggered = true
+                break
+            end
+            if reject_val == REJECTPRE
                 forward_traverse!(state, rsys)
                 continue
             end
@@ -128,22 +129,11 @@ function reversesearch(rsys::RSSystem, v₀; max_depth=nothing, break_depth=noth
             nv += 1
             lowest_depth = state.depth > lowest_depth ? state.depth : lowest_depth
 
-            if has_reducer(rsys)
-                reduce_val = rsys.reduce_op(reduce_val, rsys.reducer(v, reduce_args...))
-            end
-            if has_aggregator(rsys)
-                agg_check, agr_val = rsys.aggregator(v, aggregate_args...)
-                agg_check && push!(aggregate_val, agr_val)
-            end
-
-            if (!isnothing(max_vertices) && nv >= max_vertices) ||
-               (!isnothing(break_depth) && state.depth == break_depth) ||
-               (has_rejector(rsys) && reject_val == rs_break)
+            if reject_val == BREAKPOST || nv >= max_vertices
                 break_triggered = true
                 break
             end
-            if (!isnothing(max_depth) && state.depth >= max_depth) ||
-               (has_rejector(rsys) && reject_val == rs_rejectpost)
+            if reject_val == REJECTPOST || state.depth >= max_depth 
                 forward_traverse!(state, rsys)
                 continue
             end
@@ -154,14 +144,14 @@ function reversesearch(rsys::RSSystem, v₀; max_depth=nothing, break_depth=noth
     end
 
     if break_triggered
-        result = rs_breaktriggered
+        result = BREAKTRIGGERED
     elseif nv == max_vertices
-        result = rs_maxvertreached # TODO: extra state for when both vertices and depth reached
+        result = MAXVERTREACHED # TODO: extra state for when both vertices and depth reached
     elseif lowest_depth == max_depth
-        result = rs_maxdepthreached
+        result = MAXDEPTHREACHED
     else
-        result = rs_success
+        result = COMPLETE
     end
 
-    return (; result, nv, lowest_depth, reduce_val, aggregate_val)
+    return (; result, nv, lowest_depth)
 end
