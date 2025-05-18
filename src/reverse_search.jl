@@ -193,66 +193,75 @@ function reversesearch(rsys::RSSystem, state::RSState; maxdepth=Inf, maxverts=In
     return (; result, nv, lowest_depth)
 end
 
-function rs_worker(rsys::RSSystem, input_queue, work_tokens, stop_signal; depth_per_task, verts_per_task, callback=nothing, callback_args=())
+function rs_worker(rsys::RSSystem, input_queue, work_tokens, stop_signal, total_nv, lowest_depth; depth_per_task, verts_per_task, maxdepth, maxverts, callback=nothing, callback_args=())
     has_callback = !isnothing(callback)
 
-    function worker_callback(state, nv, args...)
+    function worker_callback(state, task_nv, start_depth, args...)
         stop_signal[] && return BREAKPRE
+        total_nv[] >= maxverts && return BREAKPRE
 
         reject_val = has_callback ? callback(state, args...) : NOREJECT
 
         if reject_val == NOREJECT || reject_val == REJECTPOST || reject_val == BREAKPOST
-            nv[] += 1
+            task_nv[] += 1
         end
         
         # If max number of vertices have been visited,
         # stop going to the children of new vertices
         # and add the vertex to the input queue
-        if (nv[] >= verts_per_task || state.depth == depth_per_task) && reject_val == NOREJECT
+        total_depth = state.depth + start_depth
+        if (task_nv[] >= verts_per_task || state.depth == depth_per_task) && reject_val == NOREJECT && total_depth < maxdepth
             reject_val = REJECTPRE
             if isinplace(rsys)
-                put!(input_queue, copy(state.v))
+                put!(input_queue, (copy(state.v), total_depth))
             else
-                put!(input_queue, state.v)
+                put!(input_queue, (state.v, total_depth))
             end
         end
         return reject_val
     end
 
-    worker_nv = 0
+    # worker_maxdepth = 0
 
     while true
-        current_nv = [1]
+        task_nv = Base.RefValue(1)
 
-        v = take!(input_queue)
-        isnothing(v) && break
+        input = take!(input_queue)
+        isnothing(input) && break
+
+        v, start_depth = input
 
         put!(work_tokens, true)
 
         state = RSState(v; depth=0) # TODO make general
-        result, nv, lowest_depth = reversesearch(rsys, state; callback=worker_callback, callback_args=(current_nv, callback_args...))
+        result, nv, depth_reached = reversesearch(rsys, state; maxdepth=maxdepth-start_depth, callback=worker_callback, callback_args=(task_nv, start_depth, callback_args...))
 
-        if result == BREAKTRIGGERED
+        Threads.atomic_add!(total_nv, nv)
+        Threads.atomic_max!(lowest_depth, start_depth + depth_reached)
+        # worker_maxdepth = max(worker_maxdepth, start_depth + depth_reached)
+
+        take!(work_tokens)
+
+        if result == BREAKTRIGGERED || result == MAXVERTREACHED
             stop_signal[] = true
             break
         end
-
-        worker_nv += nv
-        take!(work_tokens)
     end
-    return worker_nv #, lowest_depth
+    return
 end
 
 function rs_parallel(rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, maxdepth=Inf, maxverts=Inf, callback=nothing, callback_args=())
-    input_queue = Channel{Union{Nothing,typeof(state.v)}}(Inf)
+    input_queue = Channel{Union{Nothing,Tuple{typeof(state.v),Int}}}(Inf)
 
     nworkers = nthreads() - 1
     work_tokens = Channel{Bool}(nworkers)
-    stop_signal = [false]
+    stop_signal = Threads.Atomic{Bool}(false)
+    nv = Threads.Atomic{Int}(0)
+    lowest_depth = Threads.Atomic{Int}(0)
 
-    put!(input_queue, copy(state.v))
+    put!(input_queue, (copy(state.v), state.depth))
 
-    tasks = [@spawn rs_worker(rsys, input_queue, work_tokens, stop_signal; depth_per_task, verts_per_task, callback, callback_args) for _ in 1:nworkers]
+    tasks = [@spawn rs_worker(rsys, input_queue, work_tokens, stop_signal, nv, lowest_depth; depth_per_task, verts_per_task, maxdepth, maxverts, callback, callback_args) for _ in 1:nworkers]
 
     while true
         sleep(0.01)
@@ -265,7 +274,6 @@ function rs_parallel(rsys::RSSystem, state::RSState; depth_per_task, verts_per_t
             break
         end
     end
-
-    nv = sum(fetch, tasks)
-    return nv
+    foreach(wait, tasks)
+    return nv[], lowest_depth[]
 end
