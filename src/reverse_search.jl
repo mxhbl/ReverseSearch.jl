@@ -107,7 +107,7 @@ value(neighcount::CachedNeighborCounter) = last(neighcount.js)
 @enum RSStatus COMPLETE = 0 MAXVERTREACHED = 1 MAXDEPTHREACHED = 2 BREAKTRIGGERED = 3
 
 function rs(f, rsys::RSSystem, state::RSState; fargs=())
-    finished = false
+    break_flag = false
 
     while true
         success = reverse_traverse!(state, rsys)
@@ -115,6 +115,7 @@ function rs(f, rsys::RSSystem, state::RSState; fargs=())
             reject_val = f(state.v, state.depth, fargs...)
 
             if reject_val == BREAK
+                break_flag = true
                 break
             end
             if reject_val == REJECT
@@ -124,12 +125,11 @@ function rs(f, rsys::RSSystem, state::RSState; fargs=())
         else
             success = forward_traverse!(state, rsys)
             if !success 
-                finished = true
                 break
             end
         end
     end
-    return finished
+    return break_flag
 end
 
 function _rsworker(f, rsys::RSSystem, input_queue, work_tokens, break_flag; depth_per_task, verts_per_task, fargs=())
@@ -178,7 +178,7 @@ function _rsworker(f, rsys::RSSystem, input_queue, work_tokens, break_flag; dept
     return
 end
 
-function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads, fargs=())
+function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads=Threads.nthreads(), fargs=())
     input_queue = Channel{Union{Nothing,Tuple{typeof(state.v),Int}}}(Inf)
 
     nworkers = min(Threads.nthreads(), nthreads) - 1
@@ -223,11 +223,11 @@ function Base.iterate(iter::RSIterator, state::RSState)
     if state.depth == iter.maxdepth
         forward_traverse!(state, iter.rsys)
     end
-    finished = rs((_...)->ReverseSearch.BREAK, iter.rsys, state)
-    if finished 
-        return nothing
-    else
+    not_finished = rs((_...)->ReverseSearch.BREAK, iter.rsys, state)
+    if not_finished 
         return (state.v, state.depth), state
+    else
+        return nothing
     end
 end
 
@@ -236,30 +236,29 @@ function Base.iterate(iter::RSIterator)
     return (state.v, state.depth), state
 end
 
-
 function reversesearch(f, rsys::RSSystem, v₀; threaded=false, cached=true, kwargs...)
     state = RSState(v₀; cached)
-    if threaded
-        return _reversesearch_multithread(f, rsys, state; kwargs...)
-    else
-        return _reversesearch_singlethread(f, rsys, state; kwargs...)
-    end
+    return _reversesearch(f, rsys, state, Val(threaded); kwargs...)
 end
 reversesearch(rsys::RSSystem, v₀; kwargs...) = reversesearch(nothing, rsys, v₀; kwargs...)
 
-function _reversesearch_singlethread(f, rsys::RSSystem, state::RSState; maxdepth=Inf, maxverts=Inf, fargs=())
+
+function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, fargs=(), kwargs...) where {threaded}
     hasf = !isnothing(f)
 
-    maxdepth_flag = Base.RefValue(false)
-    maxvert_flag = Base.RefValue(false)
-    break_flag = Base.RefValue(false)
+    maxdepth_flag = threaded ? Threads.Atomic{Bool}(false) : Base.Ref(false)
+    maxvert_flag = threaded ? Threads.Atomic{Bool}(false) : Base.Ref(false)
 
-    nv = Base.RefValue(1)
-    lowest_depth = Base.RefValue(1)
+    nv = threaded ? Threads.Atomic{Int}(1) : Base.Ref(1)
+    lowest_depth = threaded ? Threads.Atomic{Int}(1) : Base.Ref(1)
 
     function callback(v, depth, args...)
-        maxvert_flag[] = maxvert_flag[] || nv[] >= maxverts
-
+        if threaded
+            Threads.atomic_or!(maxvert_flag, nv[] >= maxverts)
+        else
+            maxvert_flag[] = maxvert_flag[] || nv[] >= maxverts
+        end
+       
         if !maxvert_flag[]
             reject_val = hasf ? f(v, depth, args...) : NOREJECT
         else
@@ -267,57 +266,13 @@ function _reversesearch_singlethread(f, rsys::RSSystem, state::RSState; maxdepth
         end
 
         if reject_val == NOREJECT
-            nv[] += 1
-            lowest_depth[] = max(lowest_depth[], depth)
-            if depth == maxdepth
-                maxdepth_flag[] = true
-                reject_val = REJECT
+            if threaded
+                Threads.atomic_add!(nv, 1)
+                Threads.atomic_max!(lowest_depth, depth)
+            else
+                nv[] += 1
+                lowest_depth[] = max(lowest_depth[], depth)
             end
-        elseif reject_val == BREAK
-            break_flag[] = true
-        end
-
-        return reject_val
-    end
-
-    rs(callback, rsys, state; fargs)
-
-    if break_flag[]
-        result = BREAKTRIGGERED
-    elseif maxvert_flag[]
-        result = MAXVERTREACHED
-    elseif maxdepth_flag[]
-        result = MAXDEPTHREACHED
-    else
-        result = COMPLETE
-    end
-
-    return result, nv[], lowest_depth[]
-end
-
-# TODO: this is the exact same code, except that Base.RefValue is replace with atomics
-# Maybe there is a simple macro that can eliminate the need for duplicate code
-function _reversesearch_multithread(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads=Threads.nthreads(), maxdepth=Inf, maxverts=Inf, fargs=())
-    hasf = !isnothing(f)
-
-    maxdepth_flag = Threads.Atomic{Bool}(false)
-    maxvert_flag = Threads.Atomic{Bool}(false)
-
-    nv = Threads.Atomic{Int}(1)
-    lowest_depth = Threads.Atomic{Int}(1)
-
-    function callback(v, depth, args...)
-        Threads.atomic_or!(maxvert_flag, nv[] >= maxverts)
-
-        if !maxvert_flag[]
-            reject_val = hasf ? f(v, depth, args...) : NOREJECT
-        else
-            reject_val = BREAK
-        end
-
-        if reject_val == NOREJECT
-            Threads.atomic_add!(nv, 1)
-            Threads.atomic_max!(lowest_depth, depth)
             if depth == maxdepth
                 reject_val = REJECT
                 maxdepth_flag[] = true
@@ -327,12 +282,13 @@ function _reversesearch_multithread(f, rsys::RSSystem, state::RSState; depth_per
         return reject_val
     end
 
-    break_flag = prs(callback, rsys, state; depth_per_task, verts_per_task, nthreads, fargs)
+    rs_fn = threaded ? prs : rs
+    break_flag = rs_fn(callback, rsys, state; fargs, kwargs...)
 
-    if break_flag
+    if maxvert_flag[]
+        result = MAXVERTREACHED 
+    elseif break_flag
         result = BREAKTRIGGERED
-    elseif maxvert_flag[]
-        result = MAXVERTREACHED
     elseif maxdepth_flag[]
         result = MAXDEPTHREACHED
     else
@@ -341,3 +297,96 @@ function _reversesearch_multithread(f, rsys::RSSystem, state::RSState; depth_per
 
     return result, nv[], lowest_depth[]
 end
+
+
+# function _reversesearch_singlethread(f, rsys::RSSystem, state::RSState; maxdepth=Inf, maxverts=Inf, fargs=())
+#     hasf = !isnothing(f)
+
+#     maxdepth_flag = Base.RefValue(false)
+#     maxvert_flag = Base.RefValue(false)
+
+#     nv = Base.RefValue(1)
+#     lowest_depth = Base.RefValue(1)
+
+#     function callback(v, depth, args...)
+#         maxvert_flag[] = maxvert_flag[] || nv[] >= maxverts
+
+#         if !maxvert_flag[]
+#             reject_val = hasf ? f(v, depth, args...) : NOREJECT
+#         else
+#             reject_val = BREAK
+#         end
+
+#         if reject_val == NOREJECT
+#             nv[] += 1
+#             lowest_depth[] = max(lowest_depth[], depth)
+#             if depth == maxdepth
+#                 maxdepth_flag[] = true
+#                 reject_val = REJECT
+#             end
+#         end
+
+#         return reject_val
+#     end
+
+#     break_flag = rs(callback, rsys, state; fargs)
+
+#     if maxvert_flag[]
+#         result = MAXVERTREACHED 
+#     elseif break_flag
+#         result = BREAKTRIGGERED
+#     elseif maxdepth_flag[]
+#         result = MAXDEPTHREACHED
+#     else
+#         result = COMPLETE
+#     end
+
+#     return result, nv[], lowest_depth[]
+# end
+
+# # TODO: this is the exact same code, except that Base.RefValue is replaced with Threads.Atomic
+# # Maybe there is a simple macro that can eliminate the need for duplicate code
+# function _reversesearch_multithread(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads=Threads.nthreads(), maxdepth=Inf, maxverts=Inf, fargs=())
+#     hasf = !isnothing(f)
+
+#     maxdepth_flag = Threads.Atomic{Bool}(false)
+#     maxvert_flag = Threads.Atomic{Bool}(false)
+
+#     nv = Threads.Atomic{Int}(1)
+#     lowest_depth = Threads.Atomic{Int}(1)
+
+#     function callback(v, depth, args...)
+#         Threads.atomic_or!(maxvert_flag, nv[] >= maxverts)
+
+#         if !maxvert_flag[]
+#             reject_val = hasf ? f(v, depth, args...) : NOREJECT
+#         else
+#             reject_val = BREAK
+#         end
+
+#         if reject_val == NOREJECT
+#             Threads.atomic_add!(nv, 1)
+#             Threads.atomic_max!(lowest_depth, depth)
+#             if depth == maxdepth
+#                 reject_val = REJECT
+#                 maxdepth_flag[] = true
+#             end
+#         end
+
+#         return reject_val
+#     end
+
+#     break_flag = prs(callback, rsys, state; depth_per_task, verts_per_task, nthreads, fargs)
+
+#     if maxvert_flag[]
+#         result = MAXVERTREACHED 
+#     elseif break_flag
+#         result = BREAKTRIGGERED
+#     elseif maxdepth_flag[]
+#         result = MAXDEPTHREACHED
+#     else
+#         result = COMPLETE
+#     end
+
+#     return result, nv[], lowest_depth[]
+# end
