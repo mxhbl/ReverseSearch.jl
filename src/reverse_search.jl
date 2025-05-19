@@ -234,13 +234,15 @@ function Base.iterate(iter::RSIterator)
 end
 
 
-function reversesearch(f, rsys::RSSystem, state::RSState; threaded=false, kwargs...)
+function reversesearch(f, rsys::RSSystem, v₀; threaded=false, cached=true, kwargs...)
+    state = RSState(v₀; cached)
     if threaded
         return _reversesearch_multithread(f, rsys, state; kwargs...)
     else
         return _reversesearch_singlethread(f, rsys, state; kwargs...)
     end
 end
+reversesearch(rsys::RSSystem, v₀; kwargs...) = reversesearch(nothing, rsys, v₀; kwargs...)
 
 function _reversesearch_singlethread(f, rsys::RSSystem, state::RSState; maxdepth=Inf, maxverts=Inf, fargs=())
     hasf = !isnothing(f)
