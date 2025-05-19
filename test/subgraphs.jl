@@ -33,13 +33,14 @@ function subgraphsearch(G)
     return ls, adj
 end
 
-function testall(G, nv, depth; maxverts=Inf, maxdepth=Inf, result=ReverseSearch.COMPLETE)
+function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, result=ReverseSearch.COMPLETE, parallel_nv=nv)
     ls, adj = subgraphsearch(G)
 
     rsiter = RSIterator(ls, adj, Int[]; cached=true, maxdepth)
     nv_rsiter = 0
     for _ in rsiter
         nv_rsiter += 1
+        nv_rsiter >= maxverts && break
     end
 
     rsys = RSSystem(ls, adj)
@@ -49,21 +50,29 @@ function testall(G, nv, depth; maxverts=Inf, maxdepth=Inf, result=ReverseSearch.
     result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys, Int[]; threaded=true, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
     result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys, Int[]; threaded=true, depth_per_task=10, verts_per_task=500, cached=false, maxdepth, maxverts)
 
-    @test result_st_cache == result
-    @test result_st_nocache == result
-    @test result_mt_cache == result
-    @test result_mt_nocache == result
+    if !isnothing(result)
+        @test result_st_cache == result
+        @test result_st_nocache == result
+        @test result_mt_cache == result
+        @test result_mt_nocache == result
+    end
 
-    @test nv_rsiter == nv
-    @test nv_st_cache == nv
-    @test nv_st_nocache == nv
-    @test nv_mt_cache == nv
-    @test nv_mt_nocache == nv
+    if !isnothing(nv)
+        @test nv_rsiter == nv
+        @test nv_st_cache == nv
+        @test nv_st_nocache == nv
+    end
+    if !isnothing(parallel_nv)
+        @test nv_mt_cache == parallel_nv
+        @test nv_mt_nocache == parallel_nv
+    end
 
-    @test depth_st_cache == depth
-    @test depth_st_nocache == depth
-    @test depth_mt_cache == depth
-    @test depth_mt_nocache == depth
+    if !isnothing(depth)
+        @test depth_st_cache == depth
+        @test depth_st_nocache == depth
+        @test depth_mt_cache == depth
+        @test depth_mt_nocache == depth
+    end
     return
 end
 
@@ -84,4 +93,7 @@ end
     G = complete_graph(20)
     testall(G, 211, 2; maxdepth=2, result=ReverseSearch.MAXDEPTHREACHED)
     testall(G, 6196, 4; maxdepth=4, result=ReverseSearch.MAXDEPTHREACHED)
+
+    G = star_graph(50)
+    testall(G, 1794; maxverts=1794, parallel_nv=nothing, result=ReverseSearch.MAXVERTREACHED)
 end
