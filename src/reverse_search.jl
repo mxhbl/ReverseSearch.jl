@@ -158,7 +158,7 @@ function _rsworker(f, rsys::RSSystem, input_queue, work_tokens, break_flag; dept
     end
 
     while true
-        task_nv = Base.RefValue(1)
+        task_nv = Ref(1)
 
         input = take!(input_queue)
         isnothing(input) && break
@@ -230,7 +230,6 @@ function Base.iterate(iter::RSIterator, state::RSState)
         return nothing
     end
 end
-
 function Base.iterate(iter::RSIterator)
     state = RSState(iter.v₀; cached=iter.cached)
     return (state.v, state.depth), state
@@ -246,11 +245,11 @@ reversesearch(rsys::RSSystem, v₀; kwargs...) = reversesearch(nothing, rsys, v�
 function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, fargs=(), kwargs...) where {threaded}
     hasf = !isnothing(f)
 
-    maxdepth_flag = threaded ? Threads.Atomic{Bool}(false) : Base.Ref(false)
-    maxvert_flag = threaded ? Threads.Atomic{Bool}(false) : Base.Ref(false)
+    maxdepth_flag = threaded ? Threads.Atomic{Bool}(false) : Ref(false)
+    maxvert_flag = threaded ? Threads.Atomic{Bool}(false) : Ref(false)
 
-    nv = threaded ? Threads.Atomic{Int}(1) : Base.Ref(1)
-    lowest_depth = threaded ? Threads.Atomic{Int}(1) : Base.Ref(1)
+    nv = threaded ? Threads.Atomic{Int}(1) : Ref(1)
+    lowest_depth = threaded ? Threads.Atomic{Int}(1) : Ref(1)
 
     function callback(v, depth, args...)
         if threaded
