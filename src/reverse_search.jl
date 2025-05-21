@@ -2,19 +2,19 @@ struct RSSystem{isinplace,LS,ADJ,COM}
     ls::LS              # local search, ls(v)
     adj::ADJ            # adjacency oracle, adj(v, j)
     compare::COM        # comparator between vertices v, v' (default Base.:(==))
-    RSSystem{isinplace}(ls, adj, compare=Base.:(==)) where {isinplace} = 
+    RSSystem{isinplace}(ls, adj, compare) where {isinplace} = 
         new{isinplace, typeof(ls), typeof(adj), typeof(compare)}(ls, adj, compare)
 end
 isinplace(::RSSystem{iip}) where {iip} = iip
 
-function RSSystem(ls, adj, args...)
+function RSSystem(ls, adj, compare=Base.:(==))
     ls_iip = SciMLBase.isinplace(ls, 2, "ls")
     adj_iip = SciMLBase.isinplace(adj, 3, "adj")
 
     if ls_iip != adj_iip
         error("Local search and adjacency function have incompatible call signatures. The functions need to either both be in place, or both be out of place.")
     end
-    return RSSystem{ls_iip}(ls, adj, args...)
+    return RSSystem{ls_iip}(ls, adj, compare)
 end
 
 mutable struct RSState{VTY,NCT}
@@ -211,8 +211,8 @@ struct RSIterator{RSYS<:RSSystem,VTY}
     cached::Bool
     maxdepth::Union{Int,Float64}
 end
-function RSIterator(ls, adj, v₀; compare=Base.:(==), cached=true, maxdepth=Inf, isinplace=nothing)
-    rsys = isnothing(isinplace) ? RSSystem(ls, adj, compare) : RSSystem{isinplace}(ls, adj, compare)
+function RSIterator(ls, adj, v₀; compare=Base.:(==), cached=true, maxdepth=Inf)
+    rsys = RSSystem(ls, adj, compare)
     return RSIterator(rsys, v₀, cached, maxdepth)
 end
 function RSIterator(rsys::RSSystem, v₀; cached=true, maxdepth=Inf)
