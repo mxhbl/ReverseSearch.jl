@@ -24,7 +24,7 @@ mutable struct RSState{VTY,NCT}
     counter::NCT
     depth::Int
 end
-RSState(v; cached::Bool=true, depth=0) = RSState(v, deepcopy(v), deepcopy(v), cached ? CachedNeighborCounter() : SimpleNeighborCounter(), depth)
+RSState(v; cached::Bool=true, depth=0) = RSState(copy(v), copy(v), copy(v), cached ? CachedNeighborCounter() : SimpleNeighborCounter(), depth)
 
 function forward_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isinplace}
     state.depth == 0 && return false
