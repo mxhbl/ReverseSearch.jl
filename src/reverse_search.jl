@@ -225,14 +225,14 @@ function Base.iterate(iter::RSIterator, state::RSState)
     end
     not_finished = rs((_...)->ReverseSearch.BREAK, iter.rsys, state)
     if not_finished 
-        return (state.v, state.depth), state
+        return (copy(state.v), state.depth), state
     else
         return nothing
     end
 end
 function Base.iterate(iter::RSIterator)
     state = RSState(iter.v₀; cached=iter.cached)
-    return (state.v, state.depth), state
+    return (copy(state.v), state.depth), state
 end
 
 function reversesearch(f, rsys::RSSystem, v₀; threaded=false, cached=true, kwargs...)
