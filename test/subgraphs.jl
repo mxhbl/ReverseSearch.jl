@@ -15,7 +15,7 @@ function subgraphsearch(G)
         return nothing
     end
 
-    function adj(U, j)
+    function adj(U, j, aux)
         j₀ = j
 
         while true
@@ -49,18 +49,21 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
     result_st_nocache, nv_st_nocache, depth_st_nocache = reversesearch(rsys, Int[]; threaded=false, cached=false, maxdepth, maxverts)
     result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys, Int[]; threaded=true, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
     result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys, Int[]; threaded=true, depth_per_task=10, verts_per_task=500, cached=false, maxdepth, maxverts)
+    result_st_aux, nv_st_aux, depth_st_aux = reversesearch(rsys, Int[]; threaded=false, aux=[0], cached=true, maxdepth, maxverts)
 
     if !isnothing(result)
         @test result_st_cache == result
         @test result_st_nocache == result
         @test result_mt_cache == result
         @test result_mt_nocache == result
+        @test result_st_aux == result
     end
 
     if !isnothing(nv)
         @test nv_rsiter == nv
         @test nv_st_cache == nv
         @test nv_st_nocache == nv
+        @test nv_st_aux == nv
     end
     if !isnothing(parallel_nv)
         @test nv_mt_cache == parallel_nv
@@ -72,6 +75,7 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
         @test depth_st_nocache == depth
         @test depth_mt_cache == depth
         @test depth_mt_nocache == depth
+        @test depth_st_aux == depth
     end
     return
 end

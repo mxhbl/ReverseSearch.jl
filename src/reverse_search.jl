@@ -1,6 +1,9 @@
+@enum RejectValue NOREJECT = 0 REJECT = 1 BREAK = 2
+@enum RSStatus COMPLETE = 0 MAXVERTREACHED = 1 MAXDEPTHREACHED = 2 BREAKTRIGGERED = 3
+
 struct RSSystem{isinplace,LS,ADJ,COM}
-    ls::LS              # local search, ls(v)
-    adj::ADJ            # adjacency oracle, adj(v, j)
+    ls::LS              # local search, ls(v), returns v_prev
+    adj::ADJ            # adjacency oracle, adj(v, j, aux) return v_next(j), Δj. May modify aux.
     compare::COM        # comparator between vertices v, v' (default Base.:(==))
     RSSystem{isinplace}(ls, adj, compare) where {isinplace} = 
         new{isinplace, typeof(ls), typeof(adj), typeof(compare)}(ls, adj, compare)
@@ -9,7 +12,7 @@ isinplace(::RSSystem{iip}) where {iip} = iip
 
 function RSSystem(ls, adj, compare=Base.:(==))
     ls_iip = SciMLBase.isinplace(ls, 2, "ls")
-    adj_iip = SciMLBase.isinplace(adj, 3, "adj")
+    adj_iip = SciMLBase.isinplace(adj, 4, "adj")
 
     if ls_iip != adj_iip
         error("Local search and adjacency function have incompatible call signatures. The functions need to either both be in place, or both be out of place.")
@@ -19,24 +22,31 @@ end
 
 mutable struct RSState{VTY,NCT}
     v::VTY
-    _temp1::VTY # Only used for inplace assignments
-    _temp2::VTY # Only used for inplace assignments
+    _temp1::Union{VTY,Nothing} # Only used for inplace assignments
+    _temp2::Union{VTY,Nothing} # Only used for inplace assignments
     counter::NCT
     depth::Int
 end
-RSState(v; cached::Bool=true, depth=0) = RSState(copy(v), copy(v), copy(v), cached ? CachedNeighborCounter() : SimpleNeighborCounter(), depth)
+function RSState(v; depth=0, cached::Bool=true, aux=nothing)
+    if isnothing(aux)
+        counter = cached ? CachedNeighborCounter() : SimpleNeighborCounter()
+    else
+        counter = cached ? CachedAuxNeighborCounter(aux) : SimpleAuxNeighborCounter(aux)
+    end
+    return RSState(copy(v), copy(v), copy(v), counter, depth)
+end
+hasaux(state::RSState) = hasaux(state.counter)
 
 function forward_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isinplace}
     state.depth == 0 && return false
 
     if isinplace
-        rsys.ls(state._temp1, state.v)
-        prev = state._temp1
-        restore!(state.counter, rsys, state.v, prev, state._temp2)
+        prev = rsys.ls(state._temp1, state.v)
+        popvertex!(state.counter, rsys, state.v, prev, state._temp2)
         copy!(state.v, state._temp1)
     else
         prev = rsys.ls(state.v)
-        restore!(state.counter, rsys, state.v, prev)
+        popvertex!(state.counter, rsys, state.v, prev)
         state.v = prev
     end
     state.depth -= 1
@@ -46,10 +56,9 @@ end
 function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isinplace}
     while true
         if isinplace
-            Δj = rsys.adj(state._temp1, state.v, value(state.counter))
-            next = state._temp1
+            next, Δj = rsys.adj(state._temp1, state.v, countervalue(state.counter), auxvalue(state.counter))
         else
-            next, Δj = rsys.adj(state.v, value(state.counter))
+            next, Δj = rsys.adj(state.v, countervalue(state.counter), auxvalue(state.counter))
         end
         isnothing(next) && return false
         increment!(state.counter, Δj)
@@ -70,41 +79,64 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
 end
 
 abstract type AbstractNeighborCounter end
-mutable struct SimpleNeighborCounter <: AbstractNeighborCounter
+abstract type AbstractSimpleNeighborCounter <: AbstractNeighborCounter end
+abstract type AbstractCachedNeighborCounter <: AbstractNeighborCounter end
+auxvalue(::AbstractNeighborCounter) = nothing
+
+mutable struct SimpleNeighborCounter <: AbstractSimpleNeighborCounter
     j::Int
 end
 SimpleNeighborCounter() = SimpleNeighborCounter(1)
+increment!(counter::AbstractSimpleNeighborCounter, Δj) = counter.j += Δj
+pushvertex!(counter::AbstractSimpleNeighborCounter) = counter.j = 1
+function popvertex!(counter::AbstractSimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
+    counter.j = 1
 
-struct CachedNeighborCounter <: AbstractNeighborCounter
+    while true
+        if isinplace
+            next, Δj = rsys.adj(temp, prev, countervalue(counter), auxvalue(counter))
+        else
+            next, Δj = rsys.adj(prev, countervalue(counter), auxvalue(counter))
+        end
+        counter.j += Δj
+        rsys.compare(next, v) && break
+    end
+    return
+end
+countervalue(counter::AbstractSimpleNeighborCounter) = counter.j
+hasaux(::SimpleNeighborCounter) = false
+
+mutable struct SimpleAuxNeighborCounter{A} <: AbstractSimpleNeighborCounter
+    j::Int
+    aux::A
+    const aux_init::A
+end
+SimpleAuxNeighborCounter(aux) = SimpleAuxNeighborCounter{typeof(aux)}(1, copy(aux), copy(aux))
+pushvertex!(counter::SimpleAuxNeighborCounter) = (counter.j = 1; counter.aux = copy(counter.aux_init))
+popvertex!(counter::SimpleAuxNeighborCounter, args...) = (invoke(popvertex!, Tuple{SimpleNeighborCounter, typeof.(args)...}, counter, args...); counter.aux = copy(counter.aux_init))
+hasaux(::SimpleAuxNeighborCounter) = true
+auxvalue(counter::SimpleAuxNeighborCounter) = counter.aux
+
+struct CachedNeighborCounter <: AbstractCachedNeighborCounter
     js::Vector{Int}
 end
 CachedNeighborCounter() = CachedNeighborCounter([1])
+increment!(counter::AbstractCachedNeighborCounter, Δj) = counter.js[end] += Δj
+pushvertex!(counter::AbstractCachedNeighborCounter) = push!(counter.js, 1)
+popvertex!(counter::AbstractCachedNeighborCounter, args...) = pop!(counter.js)
+countervalue(counter::AbstractCachedNeighborCounter) = counter.js[end]
+hasaux(::CachedNeighborCounter) = false
 
-increment!(neighcount::SimpleNeighborCounter, Δj) = neighcount.j += Δj
-increment!(neighcount::CachedNeighborCounter, Δj) = neighcount.js[end] += Δj
-pushvertex!(neighcount::SimpleNeighborCounter) = neighcount.j = 1
-pushvertex!(neighcount::CachedNeighborCounter) = push!(neighcount.js, 1)
-function restore!(neighcount::SimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
-    j = 1
-    while true
-        if isinplace
-            Δj = rsys.adj(temp, prev, j)
-            next = temp
-        else
-            next, Δj = rsys.adj(prev, j)
-        end
-        j += Δj
-        rsys.compare(next, v) && break
-    end
-    neighcount.j = j
-    return
+struct CachedAuxNeighborCounter{A} <: AbstractCachedNeighborCounter
+    js::Vector{Int}
+    aux::Vector{A}
+    aux_init::A
 end
-restore!(neighcount::CachedNeighborCounter, args...) = pop!(neighcount.js)
-value(neighcount::SimpleNeighborCounter) = neighcount.j
-value(neighcount::CachedNeighborCounter) = last(neighcount.js)
-
-@enum RejectValue NOREJECT = 0 REJECT = 1 BREAK = 2
-@enum RSStatus COMPLETE = 0 MAXVERTREACHED = 1 MAXDEPTHREACHED = 2 BREAKTRIGGERED = 3
+CachedAuxNeighborCounter(aux) = CachedAuxNeighborCounter{typeof(aux)}([1], [copy(aux)], copy(aux))
+pushvertex!(counter::CachedAuxNeighborCounter) = (push!(counter.js, 1); push!(counter.aux, copy(counter.aux_init)))
+popvertex!(counter::CachedAuxNeighborCounter, args...) = (pop!(counter.js); pop!(counter.aux))
+auxvalue(counter::CachedAuxNeighborCounter) = counter.aux[end]
+hasaux(::CachedAuxNeighborCounter) = true
 
 function rs(f, rsys::RSSystem, state::RSState; fargs=())
     break_flag = false
@@ -205,18 +237,19 @@ function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, 
     return break_flag[] # TODO: make sure this always returns the same value as the corresponding rs() call
 end
 
-struct RSIterator{RSYS<:RSSystem,VTY}
+struct RSIterator{RSYS<:RSSystem,VTY,A}
     rsys::RSYS
     v₀::VTY
     cached::Bool
+    aux::A
     maxdepth::Union{Int,Float64}
 end
-function RSIterator(ls, adj, v₀; compare=Base.:(==), cached=true, maxdepth=Inf)
+function RSIterator(ls, adj, v₀; compare=Base.:(==), cached=true, aux=nothing, maxdepth=Inf)
     rsys = RSSystem(ls, adj, compare)
-    return RSIterator(rsys, v₀, cached, maxdepth)
+    return RSIterator(rsys, v₀, cached, aux, maxdepth)
 end
-function RSIterator(rsys::RSSystem, v₀; cached=true, maxdepth=Inf)
-    return RSIterator(rsys, v₀, cached, maxdepth)
+function RSIterator(rsys::RSSystem, v₀; cached=true, aux=nothing, maxdepth=Inf)
+    return RSIterator(rsys, v₀, cached, aux, maxdepth)
 end 
 
 function Base.iterate(iter::RSIterator, state::RSState)
@@ -231,12 +264,12 @@ function Base.iterate(iter::RSIterator, state::RSState)
     end
 end
 function Base.iterate(iter::RSIterator)
-    state = RSState(iter.v₀; cached=iter.cached)
+    state = RSState(iter.v₀; cached=iter.cached, aux=iter.aux)
     return (copy(state.v), state.depth), state
 end
 
-function reversesearch(f, rsys::RSSystem, v₀; threaded=false, cached=true, kwargs...)
-    state = RSState(v₀; cached)
+function reversesearch(f, rsys::RSSystem, v₀; threaded=false, cached=true, aux=nothing, kwargs...)
+    state = RSState(v₀; cached, aux)
     return _reversesearch(f, rsys, state, Val(threaded); kwargs...)
 end
 reversesearch(rsys::RSSystem, v₀; kwargs...) = reversesearch(nothing, rsys, v₀; kwargs...)
