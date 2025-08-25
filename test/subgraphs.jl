@@ -16,18 +16,15 @@ function subgraphsearch(G)
     end
 
     function adj(U, j, aux)
-        j₀ = j
+        j > N && return nothing
+        V = sort!(union(U, j))
+        g = G[V]
 
-        while true
-            while j in U; j += 1 end
-            j > N && break
-
-            V = sort!(union(U, j))
-            g = G[V]
-            j += 1
-            is_connected(g) && return V, j - j₀
+        if is_connected(g) 
+            return V
+        else
+            return missing
         end
-        return nothing, 0
     end
 
     return ls, adj
@@ -36,20 +33,22 @@ end
 function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, result=ReverseSearch.COMPLETE, parallel_nv=nv)
     ls, adj = subgraphsearch(G)
 
-    rsiter = RSIterator(ls, adj, Int[]; cached=true, maxdepth)
+
+    rsys = RSSystem(ls, adj, Int[])
+    rsys_aux = RSSystem(ls, adj, Int[]; aux=[0])
+
+    rsiter = RSIterator(rsys; cached=true, maxdepth)
     nv_rsiter = 0
     for _ in rsiter
         nv_rsiter += 1
         nv_rsiter >= maxverts && break
     end
 
-    rsys = RSSystem(ls, adj)
-
-    result_st_cache, nv_st_cache, depth_st_cache = reversesearch(rsys, Int[]; threaded=false, cached=true, maxdepth, maxverts)
-    result_st_nocache, nv_st_nocache, depth_st_nocache = reversesearch(rsys, Int[]; threaded=false, cached=false, maxdepth, maxverts)
-    result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys, Int[]; threaded=true, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
-    result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys, Int[]; threaded=true, depth_per_task=10, verts_per_task=500, cached=false, maxdepth, maxverts)
-    result_st_aux, nv_st_aux, depth_st_aux = reversesearch(rsys, Int[]; threaded=false, aux=[0], cached=true, maxdepth, maxverts)
+    result_st_cache, nv_st_cache, depth_st_cache = reversesearch(rsys; threaded=false, cached=true, maxdepth, maxverts)
+    result_st_nocache, nv_st_nocache, depth_st_nocache = reversesearch(rsys; threaded=false, cached=false, maxdepth, maxverts)
+    result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
+    result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=false, maxdepth, maxverts)
+    result_st_aux, nv_st_aux, depth_st_aux = reversesearch(rsys_aux; threaded=false, cached=true, maxdepth, maxverts)
 
     if !isnothing(result)
         @test result_st_cache == result
