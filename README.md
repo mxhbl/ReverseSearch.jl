@@ -1,4 +1,6 @@
 # ReverseSearch.jl
+[![Build Status](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/mxhbl/ReverseSearch.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/mxhbl/ReverseSearch.jl)
 
 This is a pure Julia implementation of the [reverse search](https://en.wikipedia.org/wiki/Reverse-search_algorithm) algorithm for combinatorial enumeration and search problems. Currently a work in progress.
 
