@@ -33,7 +33,7 @@ function adj(U, j, aux)
     end
 end
 ```
-This is a very basic implementation of the method suggested in the paper above, where subgraphs of `G` are represented as lists of vertices.
+This is a very basic implementation of the subgraph enumeration method described in the paper above, where subgraphs of `G` are represented as lists of vertices.
 
 To perform reverse search with these functions, we first create a `RSSystem`:
 ```julia
