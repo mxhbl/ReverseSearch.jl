@@ -19,7 +19,6 @@ function subgraphsearch(G)
         j > N && return nothing
         V = sort!(union(U, j))
         g = G[V]
-
         if is_connected(g) 
             return V
         else

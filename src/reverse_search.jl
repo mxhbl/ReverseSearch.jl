@@ -268,7 +268,7 @@ function _rsworker(f, rsys::RSSystem, input_queue, work_tokens, break_flag; dept
 
         put!(work_tokens, true)
 
-        state = RSState(v; depth=0) # TODO pull out of this loop, then copy to it \\ add kwargs
+        state = RSState(v; depth=0)
         rs(fwrap, rsys, state; fargs=(start_depth, task_nv, fargs...))
 
         take!(work_tokens)
