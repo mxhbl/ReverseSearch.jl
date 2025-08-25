@@ -1,11 +1,13 @@
 # ReverseSearch.jl
+[![Build Status](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/mxhbl/ReverseSearch.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/mxhbl/ReverseSearch.jl)
 
 This is a pure Julia implementation of the [reverse search](https://en.wikipedia.org/wiki/Reverse-search_algorithm) algorithm for combinatorial enumeration and search problems. Currently a work in progress.
 
 ## Basic usage
 Before using this package, it is recommended to read the original reverse search [paper](https://doi.org/10.1016/0166-218X(95)00026-N) by Avis and Fukuda.
 To specify an enumeration procedure, you need to provide a local search function `ls(v)` and an adjacency oracle `adj(v, j, aux)`. For example, to enumerate all induced subgraphs of a graph `G`, one could use
-```
+```julia
 using ReverseSearch, Graphs
 
 N = 10
@@ -33,24 +35,24 @@ function adj(U, j, aux)
     end
 end
 ```
-This is a very basic implementation of the method suggested in the paper above, where subgraphs of `G` are represented as lists of vertices.
+This is a very basic implementation of the subgraph enumeration method described in the paper above, where subgraphs of `G` are represented as lists of vertices.
 
 To perform reverse search with these functions, we first create a `RSSystem`:
-```
+```julia
 v0 = Int[]
 rsys = RSSystem(ls, adj, v0)
 ```
 Here we start the enumeration from the empty subgraph (`v0 = Int[]`).
 
 Once the reverse search system is defined, we can carry out the enumeration using
-```
+```julia
 f(v, d) = (println("Found a subgraph with vertices $v at depth $d."); true)
 result, nv, maxdepth = reversesearch(f, rsys)
 ```
 The code above will perform the complete enumeration and call the function `f(v, d)` on every object `v` found at depth `d`. Through the function `f`, it is also possible to reject some of the generated objects -- see the docstring of `reversesearch` for details.
 
 Alternatively, it is also possible to create an iterable and use a `for` loop
-```
+```julia
 for (v, d) in RSIterator(rsys)
     println("Found a subgraph with vertices $v at depth $d.")
 end

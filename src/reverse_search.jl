@@ -208,6 +208,7 @@ Low-level, parallel implementation of reverse-search. This function should rarel
 See `reversesearch` or `RSIterator` for user-friendly alternatives.
 """
 function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads=Threads.nthreads(), fargs=())
+    nthreads < 2 && return rs(f, rsys, state; fargs)
     input_queue = Channel{Union{Nothing,Tuple{typeof(state.v),Int}}}(Inf)
 
     nworkers = min(Threads.nthreads(), nthreads) - 1
