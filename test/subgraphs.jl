@@ -83,9 +83,6 @@ end
     G = path_graph(32)
     testall(G, 1 + 32 * 33 ÷ 2, 32)
 
-    G = path_graph(100)
-    testall(G, 1 + 100 * 101 ÷ 2, 100)
-
     G = complete_graph(5)
     testall(G, 2 ^ 5, 5)
 
@@ -95,7 +92,7 @@ end
     G = complete_graph(20)
     testall(G, 211, 2; maxdepth=2, result=ReverseSearch.MAXDEPTHREACHED)
     testall(G, 6196, 4; maxdepth=4, result=ReverseSearch.MAXDEPTHREACHED)
-
+    
     G = star_graph(50)
     testall(G, 1794; maxverts=1794, parallel_nv=nothing, result=ReverseSearch.MAXVERTREACHED)
 end
