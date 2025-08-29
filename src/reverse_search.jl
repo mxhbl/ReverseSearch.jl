@@ -188,8 +188,7 @@ function rs(f, rsys::RSSystem, state::RSState; fargs=())
             if signal == BREAK
                 break_flag = true
                 break
-            end
-            if signal == REJECT
+            elseif signal == REJECT
                 forward_traverse!(state, rsys)
                 continue
             end
