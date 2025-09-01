@@ -188,8 +188,7 @@ function rs(f, rsys::RSSystem, state::RSState; fargs=())
             if signal == BREAK
                 break_flag = true
                 break
-            end
-            if signal == REJECT
+            elseif signal == REJECT
                 forward_traverse!(state, rsys)
                 continue
             end
@@ -208,7 +207,7 @@ Low-level, parallel implementation of reverse-search. This function should rarel
 See `reversesearch` or `RSIterator` for user-friendly alternatives.
 """
 function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads=Threads.nthreads(), fargs=())
-    nthreads < 2 && return rs(f, rsys, state; fargs)
+    nthreads < 3 && return rs(f, rsys, state; fargs)
     input_queue = Channel{Union{Nothing,Tuple{typeof(state.v),Int}}}(Inf)
 
     nworkers = min(Threads.nthreads(), nthreads) - 1
@@ -353,6 +352,11 @@ through via the `fargs` keyword argument. `f` must return one of three signals:
 !!! warning "Warning"
 
     If `threaded=true`, `f` will be called from different threads. It is your responsibility to ensure that `f` is thread-safe.
+
+!!! note
+
+    The offspring of rejected objects are not generated. This may cause unexpected results if `f` would a accept an object whose parent it rejected.
+    As a general rule, rejection should be based on properties that are "inherited", so that rejection of a parent implies rejection of all its offspring.
 
 The return value contains the final status of the enumeration, the number of generated vertices, and the lowest depth reached.
 """
