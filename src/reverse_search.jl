@@ -353,6 +353,11 @@ through via the `fargs` keyword argument. `f` must return one of three signals:
 
     If `threaded=true`, `f` will be called from different threads. It is your responsibility to ensure that `f` is thread-safe.
 
+!!! note
+
+    The offspring of rejected objects are not generated. This may cause unexpected results if `f` would a accept an object whose parent it rejected.
+    As a general rule, rejection should be based on properties that are "inherited", so that rejection of a parent implies rejection of all its offspring.
+
 The return value contains the final status of the enumeration, the number of generated vertices, and the lowest depth reached.
 """
 function reversesearch(f, rsys::RSSystem; threaded=false, cached=true, kwargs...)
