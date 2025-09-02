@@ -48,7 +48,7 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
     result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
     result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=false, maxdepth, maxverts)
     result_st_aux, nv_st_aux, depth_st_aux = reversesearch(rsys_aux; threaded=false, cached=true, maxdepth, maxverts)
-    result_mt_onethread, nv_mt_onethread, depth_mt_onethread = reversesearch(rsys; threaded=true, nthreads=1, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
+    @test_throws ArgumentError reversesearch(rsys; threaded=true, nthreads=1, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
 
     if !isnothing(result)
         @test result_st_cache == result
@@ -56,7 +56,6 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
         @test result_mt_cache == result
         @test result_mt_nocache == result
         @test result_st_aux == result
-        @test result_mt_onethread == result
     end
 
     if !isnothing(nv)
@@ -64,7 +63,6 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
         @test nv_st_cache == nv
         @test nv_st_nocache == nv
         @test nv_st_aux == nv
-        @test nv_mt_onethread == nv
     end
     if !isnothing(parallel_nv)
         @test nv_mt_cache == parallel_nv
@@ -77,7 +75,6 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
         @test depth_mt_cache == depth
         @test depth_mt_nocache == depth
         @test depth_st_aux == depth
-        @test depth_mt_onethread == depth
     end
     return
 end
