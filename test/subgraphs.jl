@@ -48,7 +48,6 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
     result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
     result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=false, maxdepth, maxverts)
     result_st_aux, nv_st_aux, depth_st_aux = reversesearch(rsys_aux; threaded=false, cached=true, maxdepth, maxverts)
-    @test_throws ArgumentError reversesearch(rsys; threaded=true, nthreads=1, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
 
     if !isnothing(result)
         @test result_st_cache == result

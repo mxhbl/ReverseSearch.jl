@@ -208,44 +208,24 @@ function rs(f, rsys::RSSystem, state::RSState; fargs=())
 end
 
 """
-    prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads=Threads.nthreads(), fargs=())
+    prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, fargs=())
 
 Low-level, parallel implementation of reverse-search. This function should rarely be called directly.
 See `reversesearch` or `RSIterator` for user-friendly alternatives.
 """
-function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, nthreads=Threads.nthreads(), fargs=())
-    nworkers = min(Threads.nthreads(), nthreads) - 1
-    nworkers < 2 && throw(ArgumentError("Multi-threaded reverse search requires at least three threads. Rerun with `nthreads=3` or higher, or use single-threaded reverse search."))
-
-    input_queue = Channel{Union{Nothing,Tuple{typeof(state.v),Int}}}(Inf)
-    work_tokens = Channel{Bool}(nworkers)
-    
+function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, fargs=())
     break_flag = Threads.Atomic{Bool}(false)
-
-    put!(input_queue, (copy(state.v), state.depth))
-
-    tasks = [Threads.@spawn _rsworker(f, rsys, input_queue, work_tokens, break_flag; depth_per_task, verts_per_task, fargs) for _ in 1:nworkers]
-
-    while true
-        sleep(0.01)
-
-        if break_flag[] || (isempty(work_tokens) && isempty(input_queue))
-            # Terminate workers
-            for _ in 1:nworkers
-                put!(input_queue, nothing)
-            end
-            break
-        end
-    end
-
-    foreach(wait, tasks)
+    _rsworker(f, rsys, state.v, 0, break_flag; depth_per_task, verts_per_task, fargs)
     return break_flag[] # TODO: make sure this always returns the same value as the corresponding rs() call
 end
 
-function _rsworker(f, rsys::RSSystem, input_queue, work_tokens, break_flag; depth_per_task, verts_per_task, fargs=())
+function _rsworker(f, rsys::RSSystem, start_v, start_depth, break_flag; depth_per_task, verts_per_task, fargs=())
     hasf = !isnothing(f)
+    tasks = Base.Task[]
 
-    function fwrap(v, task_depth, start_depth, task_nv, args...)
+    task_nv = Ref(1)
+
+    function fwrap(v, task_depth, start_depth, args...)
         # If another worker already broke, also break immedetely.
         break_flag[] && return BREAK
 
@@ -258,12 +238,7 @@ function _rsworker(f, rsys::RSSystem, input_queue, work_tokens, break_flag; dept
 
             if (task_nv[] >= verts_per_task || task_depth == depth_per_task)
                 signal = REJECT
-
-                if isinplace(rsys)
-                    put!(input_queue, (copy(v), total_depth))
-                else
-                    put!(input_queue, (v, total_depth))
-                end
+                push!(tasks, Threads.@spawn _rsworker(f, rsys, isinplace(rsys) ? copy(v) : v, $total_depth, break_flag; depth_per_task, verts_per_task, fargs))
             end
         elseif signal == BREAK
             Threads.atomic_or!(break_flag, true)
@@ -271,26 +246,11 @@ function _rsworker(f, rsys::RSSystem, input_queue, work_tokens, break_flag; dept
         return signal
     end
 
-    while true
-        task_nv = Ref(1)
-
-        input = take!(input_queue)
-        isnothing(input) && break
-        v, start_depth = input
-
-        put!(work_tokens, true)
-
-        state = RSState(v; depth=0)
-        rs(fwrap, rsys, state; fargs=(start_depth, task_nv, fargs...))
-
-        take!(work_tokens)
-
-        if break_flag[]
-            break
-        end
-    end
+    rs(fwrap, rsys, RSState(start_v; depth=0); fargs=(start_depth, task_nv, fargs...))
+    wait.(tasks)
     return
 end
+
 
 """
     RSIterator(rsys::RSSystem; cached=true, maxdepth=Inf)
@@ -342,7 +302,6 @@ During the enumeration, evaluate `f(v, depth)` on each object `v` generated at a
 
 If `threaded=true`, the enumeration is performed in parallel and the following additional keyword arguments need to be set:
 
-- `nthreads`: the number of threads to use (defaults to `Threads.nthreads()`).
 - `depth_per_task`: the maximal depth a single task will explore before terminating.
 - `verts_per_task`: the maximal number of objects a single task will generate before terminating.
 
