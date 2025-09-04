@@ -36,43 +36,51 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
     rsys = RSSystem(ls, adj, Int[])
     rsys_aux = RSSystem(ls, adj, Int[]; aux=[0])
 
-    rsiter = RSIterator(rsys; cached=true, maxdepth)
+    rsiter = RSIterator(rsys; cache=:all, maxdepth)
     nv_rsiter = 0
     for _ in rsiter
         nv_rsiter += 1
         nv_rsiter >= maxverts && break
     end
 
-    result_st_cache, nv_st_cache, depth_st_cache = reversesearch(rsys; threaded=false, cached=true, maxdepth, maxverts)
-    result_st_nocache, nv_st_nocache, depth_st_nocache = reversesearch(rsys; threaded=false, cached=false, maxdepth, maxverts)
-    result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=true, maxdepth, maxverts)
-    result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cached=false, maxdepth, maxverts)
-    result_st_aux, nv_st_aux, depth_st_aux = reversesearch(rsys_aux; threaded=false, cached=true, maxdepth, maxverts)
+    result_st_cache, nv_st_cache, depth_st_cache = reversesearch(rsys; threaded=false, cache=:all, maxdepth, maxverts)
+    result_st_nocache, nv_st_nocache, depth_st_nocache = reversesearch(rsys; threaded=false, cache=:none, maxdepth, maxverts)
+    result_st_countercache, nv_st_countercache, depth_st_countercache = reversesearch(rsys; threaded=false, cache=:counter, maxdepth, maxverts)
+    result_mt_cache, nv_mt_cache, depth_mt_cache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cache=:all, maxdepth, maxverts)
+    result_mt_nocache, nv_mt_nocache, depth_mt_nocache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cache=:none, maxdepth, maxverts)
+    result_mt_countercache, nv_mt_countercache, depth_mt_countercache = reversesearch(rsys; threaded=true, depth_per_task=10, verts_per_task=500, cache=:counter, maxdepth, maxverts)
+    result_st_aux, nv_st_aux, depth_st_aux = reversesearch(rsys_aux; threaded=false, cache=:all, maxdepth, maxverts)
 
     if !isnothing(result)
         @test result_st_cache == result
         @test result_st_nocache == result
+        @test result_st_countercache == result
         @test result_mt_cache == result
         @test result_mt_nocache == result
         @test result_st_aux == result
+        @test result_mt_countercache == result
     end
 
     if !isnothing(nv)
         @test nv_rsiter == nv
         @test nv_st_cache == nv
         @test nv_st_nocache == nv
+        @test nv_st_countercache == nv
         @test nv_st_aux == nv
     end
     if !isnothing(parallel_nv)
         @test nv_mt_cache == parallel_nv
         @test nv_mt_nocache == parallel_nv
+        @test nv_mt_countercache == parallel_nv
     end
 
     if !isnothing(depth)
         @test depth_st_cache == depth
         @test depth_st_nocache == depth
+        @test depth_st_countercache == depth
         @test depth_mt_cache == depth
         @test depth_mt_nocache == depth
+        @test depth_mt_countercache == depth
         @test depth_st_aux == depth
     end
     return

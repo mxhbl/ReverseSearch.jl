@@ -57,34 +57,131 @@ function RSSystem(ls, adj, args...; kwargs...)
     return RSSystem{ls_iip}(ls, adj, args...; kwargs...)
 end
 
-mutable struct RSState{VTY,NCT}
+abstract type AbstractNeighborCounter end
+
+mutable struct SimpleNeighborCounter{A} <: AbstractNeighborCounter
+    j::Int
+    aux::A
+    const aux_init::A
+end
+function SimpleNeighborCounter(; aux=nothing)
+    if isnothing(aux)
+        return SimpleNeighborCounter{typeof(aux)}(1, nothing, nothing)
+    else
+        return SimpleNeighborCounter{typeof(aux)}(1, copy(aux), copy(aux))
+    end
+end
+increment!(counter::SimpleNeighborCounter, Δj) = counter.j += Δj
+function pushvertex!(counter::SimpleNeighborCounter, args...)
+    counter.j = 1
+    if hasaux(counter)
+        counter.aux = copy(counter.aux_init)
+    end
+    return
+end
+function popvertex!(counter::SimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
+    counter.j = 1
+
+    while true
+        if isinplace
+            next = rsys.adj(temp, prev, countervalue(counter), auxvalue(counter))
+        else
+            next = rsys.adj(prev, countervalue(counter), auxvalue(counter))
+        end
+        increment!(counter, 1)
+        ismissing(next) && continue
+        rsys.compare(next, v) && break
+    end
+
+    if hasaux(counter)
+        counter.aux = copy(counter.aux_init)
+    end
+    return
+end
+hasaux(::SimpleNeighborCounter) = true
+hasaux(::SimpleNeighborCounter{Nothing}) = false
+hasvertexcache(::SimpleNeighborCounter) = false
+auxvalue(counter::SimpleNeighborCounter) = counter.aux
+countervalue(counter::SimpleNeighborCounter) = counter.j
+
+struct CachedNeighborCounter{A,VTY} <: AbstractNeighborCounter
+    js::Vector{Int}
+    aux::Vector{A}
+    aux_init::A
+    vs::Vector{VTY}
+end
+function CachedNeighborCounter(; aux=nothing, v=nothing)
+    a1, a2 = isnothing(aux) ? (aux, aux) : (copy(aux), copy(aux))
+    v = isnothing(v) ? v : copy(v)
+    return CachedNeighborCounter{typeof(aux),typeof(v)}([1], [a2], a1, [v])
+end
+increment!(counter::CachedNeighborCounter, Δj) = counter.js[end] += Δj
+function pushvertex!(counter::CachedNeighborCounter, v) 
+    push!(counter.js, 1)
+    hasvertexcache(counter) && push!(counter.vs, v)
+    hasaux(counter) && push!(counter.aux, copy(counter.aux_init))
+    return
+end
+function popvertex!(counter::CachedNeighborCounter, args...)
+    pop!(counter.js)
+    hasaux(counter) && pop!(counter.aux)
+    if hasvertexcache(counter) 
+        pop!(counter.vs)
+        return last(counter.vs)
+    else
+        return
+    end
+end
+hasaux(::CachedNeighborCounter) = true
+hasaux(::CachedNeighborCounter{Nothing}) = false
+hasvertexcache(::CachedNeighborCounter) = true
+hasvertexcache(::CachedNeighborCounter{<:Any, Nothing}) = false
+auxvalue(counter::CachedNeighborCounter) = counter.aux[end]
+countervalue(counter::CachedNeighborCounter) = counter.js[end]
+
+mutable struct RSState{VTY,NCT<:AbstractNeighborCounter}
     v::VTY
-    _temp1::Union{VTY,Nothing,Missing} # Only used for inplace assignments
-    _temp2::Union{VTY,Nothing,Missing} # Only used for inplace assignments
+    _temp1::Union{VTY,Nothing} # Only used for inplace assignments
+    _temp2::Union{VTY,Nothing} # Only used for inplace assignments
     counter::NCT
     depth::Int
 end
-function RSState(v; depth=0, cached::Bool=true, aux=nothing)
-    if isnothing(aux)
-        counter = cached ? CachedNeighborCounter() : SimpleNeighborCounter()
+function RSState(v; depth=0, cachelevel::Val{CL}=Val(2), aux=nothing) where {CL}
+    if CL == 2
+        counter = CachedNeighborCounter(; aux, v)
+    elseif CL == 1
+        counter = CachedNeighborCounter(; aux, v=nothing)
+    elseif CL == 0
+        counter = SimpleNeighborCounter(; aux)
     else
-        counter = cached ? CachedAuxNeighborCounter(aux) : SimpleAuxNeighborCounter(aux)
+        throw(ArgumentError("Invalid cache level. Valid options are 0 (no caching), 1 (caching the counter only), and 2 (caching counter and vertices)."))
     end
     return RSState(copy(v), copy(v), copy(v), counter, depth)
 end
 hasaux(state::RSState) = hasaux(state.counter)
+hasvertexcache(state::RSState) = hasvertexcache(state.counter)
+hascountercache(state::RSState) = state.counter isa CachedNeighborCounter
+cachelevel(state::RSState) = hasvertexcache(state) ? Val(2) : hascountercache(state) ? Val(1) : Val(0)
 
 function forward_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isinplace}
     state.depth == 0 && return false
 
-    if isinplace
-        prev = rsys.ls(state._temp1, state.v)
-        popvertex!(state.counter, rsys, state.v, prev, state._temp2)
-        copy!(state.v, prev)
+    if hasvertexcache(state)
+        if isinplace
+            copy!(state.v, popvertex!(state.counter))
+        else
+            state.v = popvertex!(state.counter)
+        end
     else
-        prev = rsys.ls(state.v)
-        popvertex!(state.counter, rsys, state.v, prev)
-        state.v = prev
+        if isinplace
+            prev = rsys.ls(state._temp1, state.v)
+            popvertex!(state.counter, rsys, state.v, prev, state._temp2)
+            copy!(state.v, prev)
+        else
+            prev = rsys.ls(state.v)
+            popvertex!(state.counter, rsys, state.v, prev)
+            state.v = prev
+        end
     end
     state.depth -= 1
     return true
@@ -111,72 +208,10 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
         end
 
         state.depth += 1
-        pushvertex!(state.counter)
+        pushvertex!(state.counter, state.v)
         return true
     end
 end
-
-abstract type AbstractNeighborCounter end
-abstract type AbstractSimpleNeighborCounter <: AbstractNeighborCounter end
-abstract type AbstractCachedNeighborCounter <: AbstractNeighborCounter end
-auxvalue(::AbstractNeighborCounter) = nothing
-
-mutable struct SimpleNeighborCounter <: AbstractSimpleNeighborCounter
-    j::Int
-end
-SimpleNeighborCounter() = SimpleNeighborCounter(1)
-increment!(counter::AbstractSimpleNeighborCounter, Δj) = counter.j += Δj
-pushvertex!(counter::AbstractSimpleNeighborCounter) = counter.j = 1
-function popvertex!(counter::AbstractSimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
-    counter.j = 1
-
-    while true
-        if isinplace
-            next = rsys.adj(temp, prev, countervalue(counter), auxvalue(counter))
-        else
-            next = rsys.adj(prev, countervalue(counter), auxvalue(counter))
-        end
-        increment!(counter, 1)
-        ismissing(next) && continue
-        rsys.compare(next, v) && break
-    end
-    return
-end
-countervalue(counter::AbstractSimpleNeighborCounter) = counter.j
-hasaux(::SimpleNeighborCounter) = false
-
-mutable struct SimpleAuxNeighborCounter{A} <: AbstractSimpleNeighborCounter
-    j::Int
-    aux::A
-    const aux_init::A
-end
-SimpleAuxNeighborCounter(aux) = SimpleAuxNeighborCounter{typeof(aux)}(1, copy(aux), copy(aux))
-pushvertex!(counter::SimpleAuxNeighborCounter) = (counter.j = 1; counter.aux = copy(counter.aux_init))
-popvertex!(counter::SimpleAuxNeighborCounter, args...) = (invoke(popvertex!, Tuple{SimpleNeighborCounter, typeof.(args)...}, counter, args...); counter.aux = copy(counter.aux_init))
-hasaux(::SimpleAuxNeighborCounter) = true
-auxvalue(counter::SimpleAuxNeighborCounter) = counter.aux
-
-struct CachedNeighborCounter <: AbstractCachedNeighborCounter
-    js::Vector{Int}
-end
-CachedNeighborCounter() = CachedNeighborCounter([1])
-increment!(counter::AbstractCachedNeighborCounter, Δj) = counter.js[end] += Δj
-pushvertex!(counter::AbstractCachedNeighborCounter) = push!(counter.js, 1)
-popvertex!(counter::AbstractCachedNeighborCounter, args...) = pop!(counter.js)
-countervalue(counter::AbstractCachedNeighborCounter) = counter.js[end]
-hasaux(::CachedNeighborCounter) = false
-
-struct CachedAuxNeighborCounter{A} <: AbstractCachedNeighborCounter
-    js::Vector{Int}
-    aux::Vector{A}
-    aux_init::A
-end
-CachedAuxNeighborCounter(aux) = CachedAuxNeighborCounter{typeof(aux)}([1], [copy(aux)], copy(aux))
-pushvertex!(counter::CachedAuxNeighborCounter) = (push!(counter.js, 1); push!(counter.aux, copy(counter.aux_init)))
-popvertex!(counter::CachedAuxNeighborCounter, args...) = (pop!(counter.js); pop!(counter.aux))
-auxvalue(counter::CachedAuxNeighborCounter) = counter.aux[end]
-hasaux(::CachedAuxNeighborCounter) = true
-
 
 """
     rs(f, rsys::RSSystem, state::RSState; fargs=())
@@ -215,15 +250,17 @@ See `reversesearch` or `RSIterator` for user-friendly alternatives.
 """
 function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, fargs=())
     break_flag = Threads.Atomic{Bool}(false)
-    _rsworker(f, rsys, state.v, 0, break_flag; depth_per_task, verts_per_task, fargs)
+    _rsworker(f, rsys, state, break_flag; depth_per_task, verts_per_task, fargs)
     return break_flag[] # TODO: make sure this always returns the same value as the corresponding rs() call
 end
 
-function _rsworker(f, rsys::RSSystem, start_v, start_depth, break_flag; depth_per_task, verts_per_task, fargs=())
+function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_per_task, fargs=())
     hasf = !isnothing(f)
     tasks = Base.Task[]
 
     task_nv = Ref(1)
+    start_depth = state.depth
+    state.depth = 0
 
     function fwrap(v, task_depth, start_depth, args...)
         # If another worker already broke, also break immedetely.
@@ -238,7 +275,8 @@ function _rsworker(f, rsys::RSSystem, start_v, start_depth, break_flag; depth_pe
 
             if (task_nv[] >= verts_per_task || task_depth == depth_per_task)
                 signal = REJECT
-                push!(tasks, Threads.@spawn _rsworker(f, rsys, isinplace(rsys) ? copy(v) : v, $total_depth, break_flag; depth_per_task, verts_per_task, fargs))
+                new_state = RSState(v; depth=total_depth, cachelevel=cachelevel(state), aux=rsys.aux)
+                push!(tasks, Threads.@spawn _rsworker(f, rsys, new_state, break_flag; depth_per_task, verts_per_task, fargs))
             end
         elseif signal == BREAK
             Threads.atomic_or!(break_flag, true)
@@ -246,9 +284,21 @@ function _rsworker(f, rsys::RSSystem, start_v, start_depth, break_flag; depth_pe
         return signal
     end
 
-    rs(fwrap, rsys, RSState(start_v; depth=0); fargs=(start_depth, task_nv, fargs...))
+    rs(fwrap, rsys, state; fargs=(start_depth, task_nv, fargs...))
     wait.(tasks)
     return
+end
+
+function parse_cachemode(cachemode::Symbol)
+    if cachemode == :all
+        return Val(2)
+    elseif cachemode == :counter
+        return Val(1)
+    elseif cachemode == :none
+        return Val(0)
+    else
+        throw(ArgumentError("Invalid cache mode. Valid choices are `:all`, `:counter`, or `:none`."))
+    end
 end
 
 
@@ -267,12 +317,13 @@ end
 The iterator will generate all objects up to a depth of `maxdepth`. For more fine-grained
 control over the enumeration process, use `reversesearch`.
 """
-struct RSIterator{RSYS<:RSSystem}
+struct RSIterator{RSYS<:RSSystem, CL}
     rsys::RSYS
-    cached::Bool
+    cachelevel::CL
     maxdepth::Union{Int,Float64}
-    function RSIterator(rsys::RSSystem; cached=true, maxdepth=Inf)
-        return new{typeof(rsys)}(rsys, cached, maxdepth)
+    function RSIterator(rsys::RSSystem; cache=:all, maxdepth=Inf)
+        cl = parse_cachemode(cache)
+        return new{typeof(rsys),typeof(cl)}(rsys, cl, maxdepth)
     end 
 end
 
@@ -288,10 +339,9 @@ function Base.iterate(iter::RSIterator, state::RSState)
     end
 end
 function Base.iterate(iter::RSIterator)
-    state = RSState(iter.rsys.v₀; cached=iter.cached, aux=iter.rsys.aux)
+    state = RSState(iter.rsys.v₀; cachelevel=iter.cachelevel, aux=iter.rsys.aux)
     return (copy(state.v), state.depth), state
 end
-
 
 """
     reversesearch([f], rsys::RSSystem; threaded=false, cached=true, maxdepth=Inf, maxverts=Inf, fargs=(), kwargs...)
@@ -308,9 +358,13 @@ If `threaded=true`, the enumeration is performed in parallel and the following a
 The optimal values for `depth_per_task` and `verts_per_task` are highly problem-specific, there are no default values and some tuning is usually required 
 to achieve good performance.
 
-The `cached` keyword argument determines whether information along the current branch in the search tree should be cached, or if it needs to be 
-regenerated at each forward traverse. This should usually be left as `true`, unless you are dealing with very large-scale enumerations or run into 
-memory issues.
+The `cache` keyword argument determines whether information along the current branch in the search tree should be cached, or if it needs to be 
+regenerated at each forward traverse. This should usually be left as `:all`, unless you are dealing with very large-scale enumerations or run into 
+memory issues. Valid options are:
+
+- `:all`: cache all vertices and neighborcounters along the current search branch. Fast, but may lead to heavy memory use if the search tree is very deep.
+- `:counter`: cache only the neighborcounters.
+- `:none`: do not cache anything. Slowest, but most memory-saving option.
 
 The optional function `f` can be used to both process the generated objects and to steer the enumeration procedure.
 `f(v, depth, args...)` must take as inputs an object `v`, the `depth` at which `v` was found, and any number of optional arguments, which will be passed 
@@ -331,8 +385,8 @@ through via the `fargs` keyword argument. `f` must return one of three signals:
 
 The return value contains the final status of the enumeration, the number of generated vertices, and the lowest depth reached.
 """
-function reversesearch(f, rsys::RSSystem; threaded=false, cached=true, kwargs...)
-    state = RSState(rsys.v₀; cached, aux=rsys.aux)
+function reversesearch(f, rsys::RSSystem; threaded=false, cache=:all, kwargs...)
+    state = RSState(rsys.v₀; cachelevel=parse_cachemode(cache), aux=rsys.aux)
     return _reversesearch(f, rsys, state, Val(threaded); kwargs...)
 end
 reversesearch(rsys::RSSystem; kwargs...) = reversesearch(nothing, rsys; kwargs...)
