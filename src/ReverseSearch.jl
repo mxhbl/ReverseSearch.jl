@@ -57,7 +57,81 @@ function RSSystem(ls, adj, args...; kwargs...)
     return RSSystem{ls_iip}(ls, adj, args...; kwargs...)
 end
 
-mutable struct RSState{VTY,NCT}
+abstract type AbstractNeighborCounter end
+
+mutable struct SimpleNeighborCounter{A} <: AbstractNeighborCounter
+    j::Int
+    aux::A
+    const aux_init::A
+end
+function SimpleNeighborCounter(aux=nothing)
+    if isnothing(aux)
+        return SimpleNeighborCounter{typeof(aux)}(1, nothing, nothing)
+    else
+        return SimpleNeighborCounter{typeof(aux)}(1, copy(aux), copy(aux))
+    end
+end
+increment!(counter::SimpleNeighborCounter, Δj) = counter.j += Δj
+function pushvertex!(counter::SimpleNeighborCounter)
+    counter.j = 1
+    if hasaux(counter)
+        counter.aux = copy(counter.aux_init)
+    end
+    return
+end
+function popvertex!(counter::SimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
+    counter.j = 1
+
+    while true
+        if isinplace
+            next = rsys.adj(temp, prev, countervalue(counter), auxvalue(counter))
+        else
+            next = rsys.adj(prev, countervalue(counter), auxvalue(counter))
+        end
+        increment!(counter, 1)
+        ismissing(next) && continue
+        rsys.compare(next, v) && break
+    end
+
+    if hasaux(counter)
+        counter.aux = copy(counter.aux_init)
+    end
+    return
+end
+hasaux(::SimpleNeighborCounter) = true
+hasaux(::SimpleNeighborCounter{Nothing}) = false
+auxvalue(counter::SimpleNeighborCounter) = counter.aux
+countervalue(counter::SimpleNeighborCounter) = counter.j
+
+struct CachedNeighborCounter{A} <: AbstractNeighborCounter
+    js::Vector{Int}
+    aux::Vector{A}
+    aux_init::A
+end
+function CachedNeighborCounter(aux=nothing)
+    if isnothing(aux)
+        return CachedNeighborCounter{typeof(aux)}([1], [nothing], nothing)
+    else
+        return CachedNeighborCounter{typeof(aux)}([1], [copy(aux)], copy(aux))
+    end
+end
+increment!(counter::CachedNeighborCounter, Δj) = counter.js[end] += Δj
+function pushvertex!(counter::CachedNeighborCounter) 
+    push!(counter.js, 1)
+    hasaux(counter) && push!(counter.aux, copy(counter.aux_init))
+    return
+end
+function popvertex!(counter::CachedNeighborCounter, args...)
+    pop!(counter.js)
+    hasaux(counter) && pop!(counter.aux)
+    return
+end
+hasaux(::CachedNeighborCounter) = true
+hasaux(::CachedNeighborCounter{Nothing}) = false
+auxvalue(counter::CachedNeighborCounter) = counter.aux[end]
+countervalue(counter::CachedNeighborCounter) = counter.js[end]
+
+mutable struct RSState{VTY,NCT<:AbstractNeighborCounter}
     v::VTY
     _temp1::Union{VTY,Nothing,Missing} # Only used for inplace assignments
     _temp2::Union{VTY,Nothing,Missing} # Only used for inplace assignments
@@ -65,11 +139,7 @@ mutable struct RSState{VTY,NCT}
     depth::Int
 end
 function RSState(v; depth=0, cached::Bool=true, aux=nothing)
-    if isnothing(aux)
-        counter = cached ? CachedNeighborCounter() : SimpleNeighborCounter()
-    else
-        counter = cached ? CachedAuxNeighborCounter(aux) : SimpleAuxNeighborCounter(aux)
-    end
+    counter = cached ? CachedNeighborCounter(aux) : SimpleNeighborCounter(aux)
     return RSState(copy(v), copy(v), copy(v), counter, depth)
 end
 hasaux(state::RSState) = hasaux(state.counter)
@@ -115,68 +185,6 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
         return true
     end
 end
-
-abstract type AbstractNeighborCounter end
-abstract type AbstractSimpleNeighborCounter <: AbstractNeighborCounter end
-abstract type AbstractCachedNeighborCounter <: AbstractNeighborCounter end
-auxvalue(::AbstractNeighborCounter) = nothing
-
-mutable struct SimpleNeighborCounter <: AbstractSimpleNeighborCounter
-    j::Int
-end
-SimpleNeighborCounter() = SimpleNeighborCounter(1)
-increment!(counter::AbstractSimpleNeighborCounter, Δj) = counter.j += Δj
-pushvertex!(counter::AbstractSimpleNeighborCounter) = counter.j = 1
-function popvertex!(counter::AbstractSimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
-    counter.j = 1
-
-    while true
-        if isinplace
-            next = rsys.adj(temp, prev, countervalue(counter), auxvalue(counter))
-        else
-            next = rsys.adj(prev, countervalue(counter), auxvalue(counter))
-        end
-        increment!(counter, 1)
-        ismissing(next) && continue
-        rsys.compare(next, v) && break
-    end
-    return
-end
-countervalue(counter::AbstractSimpleNeighborCounter) = counter.j
-hasaux(::SimpleNeighborCounter) = false
-
-mutable struct SimpleAuxNeighborCounter{A} <: AbstractSimpleNeighborCounter
-    j::Int
-    aux::A
-    const aux_init::A
-end
-SimpleAuxNeighborCounter(aux) = SimpleAuxNeighborCounter{typeof(aux)}(1, copy(aux), copy(aux))
-pushvertex!(counter::SimpleAuxNeighborCounter) = (counter.j = 1; counter.aux = copy(counter.aux_init))
-popvertex!(counter::SimpleAuxNeighborCounter, args...) = (invoke(popvertex!, Tuple{SimpleNeighborCounter, typeof.(args)...}, counter, args...); counter.aux = copy(counter.aux_init))
-hasaux(::SimpleAuxNeighborCounter) = true
-auxvalue(counter::SimpleAuxNeighborCounter) = counter.aux
-
-struct CachedNeighborCounter <: AbstractCachedNeighborCounter
-    js::Vector{Int}
-end
-CachedNeighborCounter() = CachedNeighborCounter([1])
-increment!(counter::AbstractCachedNeighborCounter, Δj) = counter.js[end] += Δj
-pushvertex!(counter::AbstractCachedNeighborCounter) = push!(counter.js, 1)
-popvertex!(counter::AbstractCachedNeighborCounter, args...) = pop!(counter.js)
-countervalue(counter::AbstractCachedNeighborCounter) = counter.js[end]
-hasaux(::CachedNeighborCounter) = false
-
-struct CachedAuxNeighborCounter{A} <: AbstractCachedNeighborCounter
-    js::Vector{Int}
-    aux::Vector{A}
-    aux_init::A
-end
-CachedAuxNeighborCounter(aux) = CachedAuxNeighborCounter{typeof(aux)}([1], [copy(aux)], copy(aux))
-pushvertex!(counter::CachedAuxNeighborCounter) = (push!(counter.js, 1); push!(counter.aux, copy(counter.aux_init)))
-popvertex!(counter::CachedAuxNeighborCounter, args...) = (pop!(counter.js); pop!(counter.aux))
-auxvalue(counter::CachedAuxNeighborCounter) = counter.aux[end]
-hasaux(::CachedAuxNeighborCounter) = true
-
 
 """
     rs(f, rsys::RSSystem, state::RSState; fargs=())
