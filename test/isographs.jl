@@ -1,7 +1,7 @@
 using NautyGraphs, Graphs
 
 nmaxedges(n) = (n * (n - 1)) ÷ 2
-iscompletegraph(g) = ne(g) == nmaxedges(nv(g)
+iscompletegraph(g) = ne(g) == nmaxedges(nv(g))
 
 function nonisomorphicsearch()
     function ls!(h, g)
