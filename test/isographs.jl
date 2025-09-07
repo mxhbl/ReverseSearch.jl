@@ -1,10 +1,7 @@
 using NautyGraphs, Graphs
 
-
-nmaxedges(g) = let n=nv(g)
-    (n * (n - 1)) ÷ 2
-end
-iscompletegraph(g) = ne(g) == nmaxedges(g)
+nmaxedges(n) = (n * (n - 1)) ÷ 2
+iscompletegraph(g) = ne(g) == nmaxedges(nv(g))
 
 function nonisomorphicsearch()
     function ls!(h, g)
@@ -12,10 +9,7 @@ function nonisomorphicsearch()
         es = edges(h)
         if isempty(es)
             rem_vertex!(h, nv(h))
-            # Make into complete graph, faster version using internals (needs LinearAlgebra):
-            # h.graphset .= 1
-            # h.graphset[diagind(h.graphset)] .= 0
-            # h.ne = nmaxedges(h)
+            # Make into complete graph
             for i in vertices(h)
                 for j in vertices(h)
                     j >= i && break
@@ -36,9 +30,7 @@ function nonisomorphicsearch()
             j > 1 && return nothing
             copy!(h, g)
 
-            # Remove all edges, faster version using internals:
-            # h.graphset .= 0
-            # h.ne = 0
+            # Remove all edges
             foreach(edges(h)) do e
                 rem_edge!(h, e)
             end
@@ -74,7 +66,9 @@ end
     rsys2 = RSSystem(ls, adj, NautyGraph(0), aux=NautyGraph[])
 
     n = 8
-    maxdepth = n + sum(nmaxedges(NautyGraph(i)) for i in 1:n)
+    # here the depth of a graph g is d = d0 + 1 + ne(g), where d0 is the depth of the complete graph with size nv(g) - 1.
+    # compute depth needed for enumerating all graphs up to size n
+    maxdepth = n + sum(nmaxedges(i) for i in 1:n)
     
     # Compare against known number of graphs from https://oeis.org/A000088
     result = (ReverseSearch.MAXDEPTHREACHED, 13599, maxdepth)
