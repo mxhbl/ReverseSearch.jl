@@ -2,7 +2,7 @@
 [![CI](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml)
 [![Coverage](https://codecov.io/gh/mxhbl/ReverseSearch.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/mxhbl/ReverseSearch.jl)
 
-This is a pure Julia implementation of the [reverse search](https://en.wikipedia.org/wiki/Reverse-search_algorithm) algorithm for combinatorial enumeration and search problems. Currently a work in progress.
+This is a pure Julia implementation of the [reverse search](https://en.wikipedia.org/wiki/Reverse-search_algorithm) algorithm for combinatorial enumeration and search problems.
 
 ## Basic usage
 Before using this package, it is recommended to read the original reverse search [paper](https://doi.org/10.1016/0166-218X(95)00026-N) by Avis and Fukuda.
