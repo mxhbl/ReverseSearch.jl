@@ -81,6 +81,9 @@ function pushvertex!(counter::SimpleNeighborCounter, args...)
 end
 function popvertex!(counter::SimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
     counter.j = 1
+    if hasaux(counter)
+        counter.aux = copy(counter.aux_init)
+    end
 
     while true
         if isinplace
@@ -91,10 +94,6 @@ function popvertex!(counter::SimpleNeighborCounter, rsys::RSSystem{isinplace}, v
         increment!(counter, 1)
         ismissing(next) && continue
         rsys.compare(next, v) && break
-    end
-
-    if hasaux(counter)
-        counter.aux = copy(counter.aux_init)
     end
     return
 end
@@ -141,8 +140,8 @@ countervalue(counter::CachedNeighborCounter) = counter.js[end]
 
 mutable struct RSState{VTY,NCT<:AbstractNeighborCounter}
     v::VTY
-    _temp1::Union{VTY,Nothing} # Only used for inplace assignments
-    _temp2::Union{VTY,Nothing} # Only used for inplace assignments
+    _temp1::VTY # Only used for inplace assignments
+    _temp2::VTY # Only used for inplace assignments
     counter::NCT
     depth::Int
 end
@@ -199,8 +198,7 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
         ismissing(next) && continue
 
         if isinplace
-            rsys.ls(state._temp2, next)
-            rsys.compare(state._temp2, state.v) || continue
+            rsys.compare(rsys.ls(state._temp2, next), state.v) || continue
             copy!(state.v, next)
         else
             rsys.compare(rsys.ls(next), state.v) || continue
@@ -208,7 +206,7 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
         end
 
         state.depth += 1
-        pushvertex!(state.counter, state.v)
+        pushvertex!(state.counter, isinplace ? copy(state.v) : state.v)
         return true
     end
 end
@@ -329,7 +327,7 @@ end
 
 function Base.iterate(iter::RSIterator, state::RSState)
     if state.depth == iter.maxdepth
-        forward_traverse!(state, iter.rsys)
+        forward_traverse!(state, iter.rsys) || return nothing
     end
     not_finished = rs((_...)->BREAK, iter.rsys, state)
     if not_finished 
