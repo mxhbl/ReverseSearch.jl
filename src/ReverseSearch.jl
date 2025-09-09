@@ -3,9 +3,8 @@ module ReverseSearch
 import SciMLBase
 
 export ACCEPT, REJECT, BREAK
-export RSSystem, RSState, RSIterator, reversesearch
+export RSSystem, RSIterator, reversesearch
 
-# @enum RejectValue REJECT = 0 ACCEPT = 1 BREAK = 2
 const ACCEPT = 1
 const REJECT = 0
 const BREAK = -1
