@@ -6,7 +6,7 @@ This is a pure Julia implementation of the [reverse search](https://en.wikipedia
 
 ## Example usage
 Before using this package, it is recommended to read the original reverse search [paper](https://doi.org/10.1016/0166-218X(95)00026-N) by Avis and Fukuda.
-To specify an enumeration procedure, you need to provide a local search function `ls(v)` and an adjacency oracle `adj(v, j, aux)`. For example, to enumerate all induced subgraphs of a graph `G`, one could use
+To specify an enumeration procedure, you need to provide a local search function `ls(v)` and an adjacency oracle `adj(v, j, aux)`. For example, to enumerate all connected induced subgraphs of a graph `G`, one could use
 ```julia
 using ReverseSearch, Graphs
 
@@ -35,7 +35,7 @@ function adj(U, j, aux)
     end
 end
 ```
-This is a very basic implementation of the subgraph enumeration method described in the paper above, where subgraphs of `G` are represented as lists of vertices.
+This is a very basic implementation of the connected subgraph enumeration method described in the paper above, where subgraphs of `G` are represented as lists of vertices.
 
 To perform reverse search with these functions, we first create a `RSSystem`:
 ```julia
