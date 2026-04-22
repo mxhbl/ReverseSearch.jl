@@ -318,13 +318,12 @@ end
 The iterator will generate all objects up to a depth of `maxdepth`. For more fine-grained
 control over the enumeration process, use `reversesearch`.
 """
-struct RSIterator{RSYS<:RSSystem,CM<:CacheMode,TF}
+struct RSIterator{RSYS<:RSSystem,CM<:CacheMode}
     rsys::RSYS
     cachemode::CM
     maxdepth::Int
-    transform::TF
-    function RSIterator(rsys::RSSystem; transform=copy, cache=CacheAll(), maxdepth=Inf)
-        return new{typeof(rsys),typeof(cache),typeof(transform)}(rsys, cache, isinf(maxdepth) ? typemax(Int) : round(Int, maxdepth), transform)
+    function RSIterator(rsys::RSSystem; cache=CacheAll(), maxdepth=Inf)
+        return new{typeof(rsys),typeof(cache)}(rsys, cache, isinf(maxdepth) ? typemax(Int) : round(Int, maxdepth))
     end 
 end
 
@@ -334,27 +333,18 @@ function Base.iterate(iter::RSIterator, state::RSState)
     end
     notdone = rs((_...)->BREAK, iter.rsys, state)
     if notdone 
-        return (iter.transform(state.v), state.depth), state
+        return (copy(state.v), state.depth), state
     else
         return nothing
     end
 end
 function Base.iterate(iter::RSIterator)
     state = RSState(iter.rsys.v₀; cache=iter.cachemode, aux=iter.rsys.aux)
-    return (iter.transform(state.v), state.depth), state
+    return (copy(state.v), state.depth), state
 end
 
-Base.IteratorSize(::RSIterator) = Base.SizeUnknown()
-Base.eltype(::RSIterator{RSSystem{isinplace,LS,ADJ,COM,VTY}}) where {isinplace,LS,ADJ,COM,VTY} = VTY
-# function Base.isdone(iter::RSIterator, state::RSState)
-#     notdone = rs((_...)->BREAK, iter.rsys, state)
-#     if notdone
-#         forward_traverse!(state, iter.rsys)
-#         return false
-#     else
-#         return true
-#     end
-# end
+Base.IteratorSize(::Type{<:RSIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{<:RSIterator{<:RSSystem{isinplace,LS,ADJ,COM,VTY}}}) where {isinplace,LS,ADJ,COM,VTY} = Tuple{VTY,Int}
 
 """
     reversesearch([f], rsys::RSSystem; threaded=false, cache=CacheAll(), maxdepth=Inf, maxverts=Inf, fargs=(), kwargs...)

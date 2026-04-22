@@ -29,9 +29,8 @@ function subgraphsearch(G)
     return ls, adj
 end
 
-function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, result=ReverseSearch.COMPLETE, parallel_nv=nv)
+function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, testcollect=false, result=ReverseSearch.COMPLETE, parallel_nv=nv)
     ls, adj = subgraphsearch(G)
-
 
     rsys = RSSystem(ls, adj, Int[])
     rsys_aux = RSSystem(ls, adj, Int[]; aux=[0])
@@ -42,6 +41,13 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, resul
         nv_rsiter += 1
         nv_rsiter >= maxverts && break
     end
+
+    if testcollect
+        @test isempty(collect(rsiter)) == false
+    end
+    @test Base.haslength(rsiter) == false
+    @test_throws MethodError length(rsiter)
+    @test eltype(rsiter) == Tuple{Vector{Int},Int}
 
     result_st_cache, nv_st_cache, depth_st_cache = reversesearch(rsys; threaded=false, cache=CacheAll(), maxdepth, maxverts)
     result_st_nocache, nv_st_nocache, depth_st_nocache = reversesearch(rsys; threaded=false, cache=CacheNothing(), maxdepth, maxverts)
@@ -89,13 +95,13 @@ end
 
 @testset "subgraphs" begin
     G = path_graph(32)
-    testall(G, 1 + 32 * 33 ÷ 2, 32)
+    testall(G, 1 + 32 * 33 ÷ 2, 32; testcollect=true)
 
     G = complete_graph(5)
-    testall(G, 2 ^ 5, 5)
+    testall(G, 2 ^ 5, 5; testcollect=true)
 
     G = complete_graph(8)
-    testall(G, 2 ^ 8, 8)
+    testall(G, 2 ^ 8, 8; testcollect=true)
 
     G = complete_graph(20)
     testall(G, 211, 2; maxdepth=2, result=ReverseSearch.MAXDEPTHREACHED)
