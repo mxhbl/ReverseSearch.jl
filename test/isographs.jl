@@ -73,19 +73,19 @@ end
     # Compare against known number of graphs from https://oeis.org/A000088
     result = (ReverseSearch.MAXDEPTHREACHED, 13599, maxdepth)
 
-    @test reversesearch(rsys1; maxdepth, threaded=false, cache=:all) == result
-    @test reversesearch(rsys1; maxdepth, threaded=false, cache=:counter) == result
-    @test reversesearch(rsys1; maxdepth, threaded=false, cache=:none) == result
+    @test reversesearch(rsys1; maxdepth, threaded=false, cache=CacheAll()) == result
+    @test reversesearch(rsys1; maxdepth, threaded=false, cache=CacheCounter()) == result
+    @test reversesearch(rsys1; maxdepth, threaded=false, cache=CacheNothing()) == result
 
-    @test reversesearch(rsys1; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=:all) == result
-    @test reversesearch(rsys1; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=:counter) == result
-    @test reversesearch(rsys1; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=:none) == result
+    @test reversesearch(rsys1; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=CacheAll()) == result
+    @test reversesearch(rsys1; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=CacheCounter()) == result
+    @test reversesearch(rsys1; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=CacheNothing()) == result
 
-    @test reversesearch(rsys2; maxdepth, threaded=false, cache=:all) == result
-    @test reversesearch(rsys2; maxdepth, threaded=false, cache=:counter) == result
-    @test reversesearch(rsys2; maxdepth, threaded=false, cache=:none) == result
+    @test reversesearch(rsys2; maxdepth, threaded=false, cache=CacheAll()) == result
+    @test reversesearch(rsys2; maxdepth, threaded=false, cache=CacheCounter()) == result
+    @test reversesearch(rsys2; maxdepth, threaded=false, cache=CacheNothing()) == result
 
-    @test reversesearch(rsys2; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=:all) == result
-    @test reversesearch(rsys2; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=:counter) == result
-    @test reversesearch(rsys2; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=:none) == result
+    @test reversesearch(rsys2; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=CacheAll()) == result
+    @test reversesearch(rsys2; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=CacheCounter()) == result
+    @test reversesearch(rsys2; maxdepth, threaded=true, depth_per_task=3, verts_per_task=50, cache=CacheNothing()) == result
 end
