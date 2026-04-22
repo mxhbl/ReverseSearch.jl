@@ -1,7 +1,5 @@
 module ReverseSearch
 
-import SciMLBase
-
 export ACCEPT, REJECT, BREAK
 export RSSystem, RSIterator, reversesearch
 export CacheAll, CacheCounter, CacheNothing
@@ -47,9 +45,17 @@ struct RSSystem{isinplace,LS,ADJ,COM,VTY,ATY}
 end
 isinplace(::RSSystem{iip}) where {iip} = iip
 
+function _isinplace(f, n::Int, name::AbstractString)
+    hasmethod(f, NTuple{n, Any}) && return true
+    hasmethod(f, NTuple{n - 1, Any}) && return false
+    throw(ArgumentError(
+        "$name must accept $n arguments (in-place) or $(n - 1) arguments (out-of-place)."
+    ))
+end
+
 function RSSystem(ls, adj, args...; kwargs...)
-    ls_iip = SciMLBase.isinplace(ls, 2, "ls")
-    adj_iip = SciMLBase.isinplace(adj, 4, "adj")
+    ls_iip = _isinplace(ls, 2, "ls")
+    adj_iip = _isinplace(adj, 4, "adj")
 
     if ls_iip != adj_iip
         throw(ArgumentError("Local search and adjacency function have incompatible call signatures. The functions need to either both be in place, or both be out of place."))
