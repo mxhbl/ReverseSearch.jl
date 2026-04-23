@@ -45,27 +45,31 @@ struct RSSystem{isinplace,LS,ADJ,COM,VTY,ATY}
 end
 isinplace(::RSSystem{iip}) where {iip} = iip
 
-function _isinplace(f, n::Int, name::AbstractString)
-    for m in methods(f)
-        sig = m.sig isa UnionAll ? Base.unwrap_unionall(m.sig) : m.sig
-        nargs = length(sig.parameters) - 1
-        nargs == n && return true
-        any(p -> p isa Core.TypeofVararg, sig.parameters) && return true
-        nargs == n - 1 && return false
-    end
-    throw(ArgumentError(
-        "$name must accept $n arguments (in-place) or $(n - 1) arguments (out-of-place)."
-    ))
-end
+function RSSystem(ls, adj, v₀; compare=Base.:(==), aux=nothing)
+    VTY = typeof(v₀)
+    ATY = typeof(aux)
 
-function RSSystem(ls, adj, args...; kwargs...)
-    ls_iip = _isinplace(ls, 2, "ls")
-    adj_iip = _isinplace(adj, 4, "adj")
+    ls_iip = if hasmethod(ls, Tuple{VTY, VTY})
+        true
+    elseif hasmethod(ls, Tuple{VTY})
+        false
+    else
+        throw(ArgumentError("ls must accept `(w::$VTY, v::$VTY)` [in-place] or `(v::$VTY)` [out-of-place]."))
+    end
+
+    adj_iip = if hasmethod(adj, Tuple{VTY, VTY, Integer, ATY})
+        true
+    elseif hasmethod(adj, Tuple{VTY, Integer, ATY})
+        false
+    else
+        throw(ArgumentError("adj must accept `(w::$VTY, v::$VTY, j::Integer, aux::$ATY)`` [in-place] or `(v::$VTY, j::Integer, aux::$ATY)` [out-of-place]."))
+    end
 
     if ls_iip != adj_iip
-        throw(ArgumentError("Local search and adjacency function have incompatible call signatures. The functions need to either both be in place, or both be out of place."))
+        throw(ArgumentError("ls and adj must both be in-place or both be out-of-place."))
     end
-    return RSSystem{ls_iip}(ls, adj, args...; kwargs...)
+
+    return RSSystem{ls_iip}(ls, adj, v₀; compare, aux)
 end
 
 abstract type AbstractNeighborCounter end
