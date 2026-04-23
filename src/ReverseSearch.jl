@@ -46,8 +46,13 @@ end
 isinplace(::RSSystem{iip}) where {iip} = iip
 
 function _isinplace(f, n::Int, name::AbstractString)
-    hasmethod(f, NTuple{n, Any}) && return true
-    hasmethod(f, NTuple{n - 1, Any}) && return false
+    for m in methods(f)
+        sig = m.sig isa UnionAll ? Base.unwrap_unionall(m.sig) : m.sig
+        nargs = length(sig.parameters) - 1
+        nargs == n && return true
+        any(p -> p isa Core.TypeofVararg, sig.parameters) && return true
+        nargs == n - 1 && return false
+    end
     throw(ArgumentError(
         "$name must accept $n arguments (in-place) or $(n - 1) arguments (out-of-place)."
     ))
