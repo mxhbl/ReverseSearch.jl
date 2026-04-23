@@ -2,15 +2,24 @@
     f1(x, y) = 1
     f2(x, args...) = 1
 
-    @test ReverseSearch._isinplace(f1, 2, "f1") == true
-    @test ReverseSearch._isinplace(f1, 3, "f1") == false
-    @test_throws ArgumentError ReverseSearch._isinplace(f1, 1, "f1")
-    @test_throws ArgumentError ReverseSearch._isinplace(f1, 4, "f1")
-    @test_throws ArgumentError ReverseSearch._isinplace(f1, 10, "f1")
+    f3(x::Int, y::Float64) = 1
+    f4(x::String, args...) = 1
 
-    @test ReverseSearch._isinplace(f2, 1, "f2") == true
-    @test ReverseSearch._isinplace(f2, 2, "f2") == true
-    @test ReverseSearch._isinplace(f2, 3, "f2") == true
-    @test ReverseSearch._isinplace(f2, 4, "f2") == true
-    @test ReverseSearch._isinplace(f2, 10, "f2") == true
+    f5(x::T, y::F) where {T,F} = 1
+    f6(x::T, args...) where {T} = 1
+
+    for f in [f1, f3, f5]
+        @test ReverseSearch._isinplace(f, 2, "f") == true
+        @test ReverseSearch._isinplace(f, 3, "f") == false
+        @test_throws ArgumentError ReverseSearch._isinplace(f, 1, "f")
+        @test_throws ArgumentError ReverseSearch._isinplace(f, 4, "f")
+        @test_throws ArgumentError ReverseSearch._isinplace(f, 10, "f")
+    end
+    for f in [f2, f4, f6]
+        @test ReverseSearch._isinplace(f, 1, "f") == true
+        @test ReverseSearch._isinplace(f, 2, "f") == true
+        @test ReverseSearch._isinplace(f, 3, "f") == true
+        @test ReverseSearch._isinplace(f, 4, "f") == true
+        @test ReverseSearch._isinplace(f, 10, "f") == true
+    end
 end
