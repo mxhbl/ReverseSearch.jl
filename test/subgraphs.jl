@@ -1,5 +1,8 @@
 using Graphs
 
+# This is a basic implementation of the connected subgraph enumeration method described in 
+# Avis & Fukuda, Discrete Applied Mathematics*, 65, 21-46 (1996).
+# https://doi.org/10.1016/0166-218x(95)00026-n
 function subgraphsearch(G)
     N = nv(G)
 
