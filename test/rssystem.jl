@@ -73,12 +73,12 @@ end
     r = RSResult(Finished, 10, 5)
     @test r.status == Finished
     @test r.nvertices == 10
-    @test r.maxdepth == 5
+    @test r.depth_reached == 5
 
     @test RSResult(Finished, 10, 5) == RSResult(Finished, 10, 5)
     @test RSResult(Finished, 10, 5) != RSResult(MaxVerticesReached, 10, 5)
     @test RSResult(Finished, 10, 5) != RSResult(Finished, 99, 5)
     @test RSResult(Finished, 10, 5) != RSResult(Finished, 10, 99)
 
-    @test repr(RSResult(MaxDepthReached, 7, 3)) == "RSResult(MaxDepthReached, nvertices=7, maxdepth=3)"
+    @test repr(RSResult(MaxDepthReached, 7, 3)) == "RSResult(MaxDepthReached, nvertices=7, depth_reached=3)"
 end

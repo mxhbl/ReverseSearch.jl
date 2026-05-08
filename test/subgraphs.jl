@@ -81,13 +81,13 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, testc
     end
 
     if !isnothing(depth)
-        @test r_st_cache.maxdepth == depth
-        @test r_st_nocache.maxdepth == depth
-        @test r_st_countercache.maxdepth == depth
-        @test r_mt_cache.maxdepth == depth
-        @test r_mt_nocache.maxdepth == depth
-        @test r_mt_countercache.maxdepth == depth
-        @test r_st_aux.maxdepth == depth
+        @test r_st_cache.depth_reached == depth
+        @test r_st_nocache.depth_reached == depth
+        @test r_st_countercache.depth_reached == depth
+        @test r_mt_cache.depth_reached == depth
+        @test r_mt_nocache.depth_reached == depth
+        @test r_mt_countercache.depth_reached == depth
+        @test r_st_aux.depth_reached == depth
     end
     return
 end

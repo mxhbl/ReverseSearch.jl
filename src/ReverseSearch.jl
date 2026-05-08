@@ -23,25 +23,25 @@ Status code returned as the first element of the `reversesearch` result tuple.
 @enum RSStatus Finished = 0 MaxVerticesReached = 1 MaxDepthReached = 2 BreakTriggered = 3
 
 """
-    RSResult(status, nvertices, maxdepth)
+    RSResult(status, nvertices, depth_reached)
 
 Result returned by `reversesearch`, with fields:
 
   - `status::RSStatus`: the reason the enumeration terminated.
   - `nvertices::Int`: the total number of vertices generated.
-  - `maxdepth::Int`: the maximum depth reached during enumeration.
+  - `depth_reached::Int`: the deepest depth reached during enumeration.
 """
 struct RSResult
     status::RSStatus
     nvertices::Int
-    maxdepth::Int
+    depth_reached::Int
 end
 
 Base.:(==)(a::RSResult, b::RSResult) =
-    a.status == b.status && a.nvertices == b.nvertices && a.maxdepth == b.maxdepth
+    a.status == b.status && a.nvertices == b.nvertices && a.depth_reached == b.depth_reached
 
 function Base.show(io::IO, r::RSResult)
-    print(io, "RSResult(", r.status, ", nvertices=", r.nvertices, ", maxdepth=", r.maxdepth, ")")
+    print(io, "RSResult(", r.status, ", nvertices=", r.nvertices, ", depth_reached=", r.depth_reached, ")")
 end
 
 
@@ -50,7 +50,7 @@ end
 
 An RSSystem defines a reverse-search enumeration procedure by specifying the local search function `ls(v)`, the
 adjacency oracle `adj(v, j, aux)`, a comparator function (defaults to `Base.:(==)`), and a starting vertex `v₀`.
-The enumeration can be carried out by calling `reversesearch(::RSSystem)`, or by iterating over an `RSIterator(::RSSystem)`.
+The enumeration can be carried out by calling [`reversesearch(::RSSystem)`](@ref), or by iterating over an [`RSIterator(::RSSystem)`](@ref).
 
 The local search and adjacency functions are expected to adhere to the following interfaces:
 
@@ -298,7 +298,7 @@ end
     rs(f, rsys::RSSystem, state::RSState)
 
 Low-level reverse-search function that should rarely be called directly.
-See `reversesearch` or `RSIterator` for user-friendly alternatives.
+See [`reversesearch`](@ref) or [`RSIterator`](@ref) for user-friendly alternatives.
 """
 function rs(f, rsys::RSSystem, state::RSState; kwargs...)
     break_flag = false
@@ -327,7 +327,7 @@ end
     prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task)
 
 Low-level, parallel implementation of reverse-search. This function should rarely be called directly.
-See `reversesearch` or `RSIterator` for user-friendly alternatives.
+See [`reversesearch`](@ref) or [`RSIterator`](@ref) for user-friendly alternatives.
 """
 function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task)
     break_flag = Threads.Atomic{Bool}(false)
@@ -473,7 +473,7 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
     maxvert_flag = threaded ? Threads.Atomic{Bool}(false) : Ref(false)
 
     nv = threaded ? Threads.Atomic{Int}(1) : Ref(1)
-    lowest_depth = threaded ? Threads.Atomic{Int}(1) : Ref(1)
+    depth_reached = threaded ? Threads.Atomic{Int}(1) : Ref(1)
 
     function fwrap(v, depth)
         if threaded
@@ -491,10 +491,10 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
         if signal == ACCEPT
             if threaded
                 Threads.atomic_add!(nv, 1)
-                Threads.atomic_max!(lowest_depth, depth)
+                Threads.atomic_max!(depth_reached, depth)
             else
                 nv[] += 1
-                lowest_depth[] = max(lowest_depth[], depth)
+                depth_reached[] = max(depth_reached[], depth)
             end
             if depth == maxdepth
                 signal = REJECT
@@ -518,6 +518,6 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
         result = Finished
     end
 
-    return RSResult(result, nv[], lowest_depth[])
+    return RSResult(result, nv[], depth_reached[])
 end
 end
