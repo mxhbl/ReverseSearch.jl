@@ -55,11 +55,11 @@ The enumeration can be carried out by calling [`reversesearch(::RSSystem)`](@ref
 The local search and adjacency functions are expected to adhere to the following interfaces:
 
 - `u = ls(v)` maps an object `v` to its parent `u`, such that `adj(u, j, aux) == v` for some index `j`.
-    An in-place version of the form `u = ls!(w, v)` is also supported (this version must also return `u`).
+    An in-place version of the form `u = ls!(w, v)` is also supported. This version must also return `u` and leave `v` untouched.
 - `u = adj(v, j, aux)` maps an object `v` onto its `j`th neighbor `u`, optionally making use and/or modifying the
     auxilary information stored in `aux`. In many applications, not all values for `j` will lead to a valid object, in which case 
     `missing` should be returned. If all neighbors are exhausted, `nothing` must be returned. An in-place version of the form 
-    `u = adj!(w, v, j, aux)` is also supported (this version must also return `u`).
+    `u = adj!(w, v, j, aux)` is also supported. This version must also return `u` and leave `v` untouched.
 
 Note that `ls` and `adj` need to either both be in-place, or both be out-of-place. If a function has methods for both signatures, the in-place version takes precedence.
 
