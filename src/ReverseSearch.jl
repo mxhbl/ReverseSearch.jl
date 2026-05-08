@@ -92,7 +92,7 @@ end
 isinplace(::RSSystem{iip}) where {iip} = iip
 
 function Base.show(io::IO, rsys::RSSystem{iip}) where {iip}
-    print(io, "RSSystem{", iip ? "inplace" : "!inplace", "}(V=", typeof(rsys.v₀))
+    print(io, "RSSystem{", iip ? "iip" : "!iip", "}(V=", typeof(rsys.v₀))
     isnothing(rsys.aux) || print(io, ", aux=", typeof(rsys.aux))
     rsys.compare === Base.:(==) || print(io, ", compare=", nameof(rsys.compare))
     print(io, ")")
