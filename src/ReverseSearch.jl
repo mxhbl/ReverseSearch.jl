@@ -272,18 +272,18 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
 end
 
 """
-    rs(f, rsys::RSSystem, state::RSState; fargs=())
+    rs(f, rsys::RSSystem, state::RSState)
 
 Low-level reverse-search function that should rarely be called directly.
 See `reversesearch` or `RSIterator` for user-friendly alternatives.
 """
-function rs(f, rsys::RSSystem, state::RSState; fargs=())
+function rs(f, rsys::RSSystem, state::RSState; kwargs...)
     break_flag = false
 
     while true
         success = reverse_traverse!(state, rsys)
         if success
-            signal = f(state.v, state.depth, fargs...)
+            signal = f(state.v, state.depth)
 
             if signal == BREAK
                 break_flag = true
@@ -301,18 +301,18 @@ function rs(f, rsys::RSSystem, state::RSState; fargs=())
 end
 
 """
-    prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, fargs=())
+    prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task)
 
 Low-level, parallel implementation of reverse-search. This function should rarely be called directly.
 See `reversesearch` or `RSIterator` for user-friendly alternatives.
 """
-function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task, fargs=())
+function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task)
     break_flag = Threads.Atomic{Bool}(false)
-    _rsworker(f, rsys, state, break_flag; depth_per_task, verts_per_task, fargs)
+    _rsworker(f, rsys, state, break_flag; depth_per_task, verts_per_task)
     return break_flag[] # TODO: make sure this always returns the same value as the corresponding rs() call
 end
 
-function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_per_task, fargs=())
+function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_per_task)
     hasf = !isnothing(f)
     tasks = Base.Task[]
 
@@ -320,13 +320,13 @@ function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_p
     start_depth = state.depth
     state.depth = 0
 
-    function fwrap(v, task_depth, start_depth, args...)
-        # If another worker already broke, also break immedetely.
+    function fwrap(v, task_depth)
+        # If another worker already broke, also break immediately.
         break_flag[] && return BREAK
 
         total_depth = task_depth + start_depth
 
-        signal = hasf ? f(v, total_depth, args...) : ACCEPT
+        signal = hasf ? f(v, total_depth) : ACCEPT
 
         if signal == ACCEPT
             task_nv[] += 1
@@ -334,7 +334,7 @@ function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_p
             if (task_nv[] >= verts_per_task || task_depth == depth_per_task)
                 signal = REJECT
                 new_state = RSState(v; depth=total_depth, cache=cachemode(state), aux=rsys.aux)
-                push!(tasks, Threads.@spawn _rsworker(f, rsys, new_state, break_flag; depth_per_task, verts_per_task, fargs))
+                push!(tasks, Threads.@spawn _rsworker(f, rsys, new_state, break_flag; depth_per_task, verts_per_task))
             end
         elseif signal == BREAK
             Threads.atomic_or!(break_flag, true)
@@ -342,7 +342,7 @@ function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_p
         return signal
     end
 
-    rs(fwrap, rsys, state; fargs=(start_depth, task_nv, fargs...))
+    rs(fwrap, rsys, state)
     wait.(tasks)
     return
 end
@@ -396,7 +396,7 @@ Base.IteratorSize(::Type{<:RSIterator}) = Base.SizeUnknown()
 Base.eltype(::Type{<:RSIterator{<:RSSystem{isinplace,LS,ADJ,COM,VTY}}}) where {isinplace,LS,ADJ,COM,VTY} = Tuple{VTY,Int}
 
 """
-    reversesearch([f], rsys::RSSystem; threaded=false, cache=CacheAll(), maxdepth=Inf, maxverts=Inf, fargs=(), kwargs...)
+    reversesearch([f], rsys::RSSystem; threaded=false, cache=CacheAll(), maxdepth=Inf, maxverts=Inf, kwargs...)
 
 Perform reverse-search enumeration using the adjacency oracle, local search, comparator, and starting vertex defined in `rsys`.
 During the enumeration, evaluate `f(v, depth)` on each object `v` generated at a certain `depth`. Stop the enumeration if a depth of 
@@ -419,8 +419,8 @@ memory issues. Valid options are:
 - `CacheNothing()`: do not cache anything. Slowest, but most memory-saving option.
 
 The optional function `f` can be used to both process the generated objects and to steer the enumeration procedure.
-`f(v, depth, args...)` must take as inputs an object `v`, the `depth` at which `v` was found, and any number of optional arguments, which will be passed 
-through via the `fargs` keyword argument. `f` must return one of three signals:
+`f(v, depth)` must take as inputs an object `v` and the `depth` at which `v` was found.
+`f` must return one of three signals:
 
 - `ACCEPT` (or `true`): reverse-search continues as normal.
 - `REJECT` (or `false`): the offspring of the current object will not be generated and the enumeration continues from the parent of the current object.
@@ -443,7 +443,7 @@ function reversesearch(f, rsys::RSSystem; threaded=false, cache=CacheAll(), kwar
 end
 reversesearch(rsys::RSSystem; kwargs...) = reversesearch(nothing, rsys; kwargs...)
 
-function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, fargs=(), kwargs...) where {threaded}
+function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, kwargs...) where {threaded}
     hasf = !isnothing(f)
 
     maxdepth_flag = threaded ? Threads.Atomic{Bool}(false) : Ref(false)
@@ -452,17 +452,17 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
     nv = threaded ? Threads.Atomic{Int}(1) : Ref(1)
     lowest_depth = threaded ? Threads.Atomic{Int}(1) : Ref(1)
 
-    function fwrap(v, depth, args...)
+    function fwrap(v, depth)
         if threaded
             Threads.atomic_or!(maxvert_flag, nv[] >= maxverts)
         else
             maxvert_flag[] = maxvert_flag[] || nv[] >= maxverts
         end
-       
+
         if maxvert_flag[]
             signal = BREAK
         else
-            signal = hasf ? f(v, depth, args...) : ACCEPT
+            signal = hasf ? f(v, depth) : ACCEPT
         end
 
         if signal == ACCEPT
@@ -483,7 +483,7 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
     end
 
     rs_fn = threaded ? prs : rs
-    break_flag = rs_fn(fwrap, rsys, state; fargs, kwargs...)
+    break_flag = rs_fn(fwrap, rsys, state; kwargs...)
 
     if maxvert_flag[]
         result = MAXVERTREACHED 
