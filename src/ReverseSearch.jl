@@ -326,6 +326,9 @@ end
 
 The iterator will generate all objects up to a depth of `maxdepth`. For more fine-grained
 control over the enumeration process, use `reversesearch`.
+
+!!! warning
+    The iteration state is mutated in-place and should not be copied, stored, or reused across iterations.
 """
 struct RSIterator{RSYS<:RSSystem,CM<:CacheMode}
     rsys::RSYS
