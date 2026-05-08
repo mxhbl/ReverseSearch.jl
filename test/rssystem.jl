@@ -69,6 +69,25 @@ Base.copy(::CopyOnlyVertex) = CopyOnlyVertex()
     @test_throws ArgumentError RSSystem(ls_oop, adj_oop, 1.0; compare=int_compare)
 end
 
+@testset "RSState" begin
+    _ls_oop(x::Vector{Int}) = x
+    _adj_oop(x::Vector{Int}, j, aux) = x
+    _ls_iip(x::Vector{Int}, y::Vector{Int}) = x
+    _adj_iip(x::Vector{Int}, y::Vector{Int}, j, aux) = x
+
+    rsys_oop = RSSystem(_ls_oop, _adj_oop, Int[])
+    rsys_iip = RSSystem(_ls_iip, _adj_iip, Int[])
+
+    state_oop = ReverseSearch.RSState(rsys_oop)
+    state_iip = ReverseSearch.RSState(rsys_iip)
+
+    @test state_oop._temp1 === nothing
+    @test state_oop._temp2 === nothing
+    @test state_iip._temp1 isa Vector{Int}
+    @test state_iip._temp2 isa Vector{Int}
+    @test state_iip._temp1 !== state_iip._temp2
+end
+
 @testset "RSResult" begin
     r = RSResult(Finished, 10, 5)
     @test r.status == Finished

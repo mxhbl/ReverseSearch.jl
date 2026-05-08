@@ -229,16 +229,17 @@ function NeighborCounter(; cache::CacheMode, aux, v=nothing)
     return counter
 end
 
-mutable struct RSState{VTY,NCT<:AbstractNeighborCounter}
+mutable struct RSState{VTY,NCT<:AbstractNeighborCounter,TMP}
     v::VTY
-    _temp1::VTY # Only used for inplace assignments
-    _temp2::VTY # Only used for inplace assignments
+    _temp1::TMP
+    _temp2::TMP
     counter::NCT
     depth::Int
 end
-function RSState(v; depth=0, cache::CacheMode=CacheAll(), aux=nothing)
+function RSState(rsys::RSSystem{iip}, v=rsys.v₀; depth=0, cache::CacheMode=CacheAll(), aux=rsys.aux) where {iip}
     counter = NeighborCounter(; cache, aux, v)
-    return RSState(copy(v), copy(v), copy(v), counter, depth)
+    t1, t2 = iip ? (copy(v), copy(v)) : (nothing, nothing)
+    return RSState(copy(v), t1, t2, counter, depth)
 end
 hasaux(state::RSState) = hasaux(state.counter)
 hasvertexcache(state::RSState) = hasvertexcache(state.counter)
@@ -356,7 +357,7 @@ function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_p
 
             if (task_nv[] >= verts_per_task || task_depth == depth_per_task)
                 signal = REJECT
-                new_state = RSState(v; depth=total_depth, cache=cachemode(state), aux=rsys.aux)
+                new_state = RSState(rsys, v; depth=total_depth, cache=cachemode(state))
                 push!(tasks, Threads.@spawn _rsworker(f, rsys, new_state, break_flag; depth_per_task, verts_per_task))
             end
         elseif signal == BREAK
@@ -420,7 +421,7 @@ function Base.iterate(iter::RSIterator, state::RSState)
     end
 end
 function Base.iterate(iter::RSIterator)
-    state = RSState(iter.rsys.v₀; cache=iter.cachemode, aux=iter.rsys.aux)
+    state = RSState(iter.rsys; cache=iter.cachemode)
     return ((iter.copy_output ? copy(state.v) : state.v), state.depth), state
 end
 
@@ -470,7 +471,7 @@ The optional function `f` can be used to both process the generated objects and 
 The return value contains the final status of the enumeration, the number of generated vertices, and the lowest depth reached.
 """
 function reversesearch(f, rsys::RSSystem; threaded=false, cache=CacheAll(), kwargs...)
-    state = RSState(rsys.v₀; cache, aux=rsys.aux)
+    state = RSState(rsys; cache)
     return _reversesearch(f, rsys, state, Val(threaded); kwargs...)
 end
 reversesearch(rsys::RSSystem; kwargs...) = reversesearch(nothing, rsys; kwargs...)
