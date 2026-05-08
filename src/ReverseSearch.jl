@@ -3,7 +3,8 @@ module ReverseSearch
 export ACCEPT, REJECT, BREAK
 export RSSystem, RSIterator, reversesearch
 export CacheAll, CacheCounter, CacheNothing
-export RSStatus, COMPLETE, MAXVERTREACHED, MAXDEPTHREACHED, BREAKTRIGGERED
+export RSStatus, Finished, MaxVerticesReached, MaxDepthReached, BreakTriggered
+export RSResult
 
 const ACCEPT = 1
 const REJECT = 0
@@ -14,12 +15,34 @@ const BREAK = -1
 
 Status code returned as the first element of the `reversesearch` result tuple.
 
-  - `COMPLETE`: the enumeration finished without hitting any limit.
-  - `MAXVERTREACHED`: stopped because the `maxverts` limit was reached.
-  - `MAXDEPTHREACHED`: stopped because the `maxdepth` limit was reached.
-  - `BREAKTRIGGERED`: stopped because the user callback returned `BREAK`.
+  - `Finished`: the enumeration finished without hitting any limit.
+  - `MaxVerticesReached`: stopped because the `maxverts` limit was reached.
+  - `MaxDepthReached`: stopped because the `maxdepth` limit was reached.
+  - `BreakTriggered`: stopped because the user callback returned `BREAK`.
 """
-@enum RSStatus COMPLETE = 0 MAXVERTREACHED = 1 MAXDEPTHREACHED = 2 BREAKTRIGGERED = 3
+@enum RSStatus Finished = 0 MaxVerticesReached = 1 MaxDepthReached = 2 BreakTriggered = 3
+
+"""
+    RSResult(status, nvertices, maxdepth)
+
+Result returned by `reversesearch`, with fields:
+
+  - `status::RSStatus`: the reason the enumeration terminated.
+  - `nvertices::Int`: the total number of vertices generated.
+  - `maxdepth::Int`: the maximum depth reached during enumeration.
+"""
+struct RSResult
+    status::RSStatus
+    nvertices::Int
+    maxdepth::Int
+end
+
+Base.:(==)(a::RSResult, b::RSResult) =
+    a.status == b.status && a.nvertices == b.nvertices && a.maxdepth == b.maxdepth
+
+function Base.show(io::IO, r::RSResult)
+    print(io, "RSResult(", r.status, ", nvertices=", r.nvertices, ", maxdepth=", r.maxdepth, ")")
+end
 
 
 """
@@ -38,7 +61,7 @@ The local search and adjacency functions are expected to adhere to the following
     `missing` should be returned. If all neighbors are exhausted, `nothing` must be returned. An in-place version of the form 
     `u = adj!(w, v, j, aux)` is also supported (this version must also return `u`).
 
-Note that `ls` and `adj` need to either both be in-place, or both be out-of-place.
+Note that `ls` and `adj` need to either both be in-place, or both be out-of-place. If a function has methods for both signatures, the in-place version takes precedence.
 
 The vertex type `V` (the type of `v₀`) must support the following operations:
 
@@ -309,7 +332,7 @@ See `reversesearch` or `RSIterator` for user-friendly alternatives.
 function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task)
     break_flag = Threads.Atomic{Bool}(false)
     _rsworker(f, rsys, state, break_flag; depth_per_task, verts_per_task)
-    return break_flag[] # TODO: make sure this always returns the same value as the corresponding rs() call
+    return break_flag[]
 end
 
 function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_per_task)
@@ -486,15 +509,15 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
     break_flag = rs_fn(fwrap, rsys, state; kwargs...)
 
     if maxvert_flag[]
-        result = MAXVERTREACHED 
+        result = MaxVerticesReached 
     elseif break_flag
-        result = BREAKTRIGGERED
+        result = BreakTriggered
     elseif maxdepth_flag[]
-        result = MAXDEPTHREACHED
+        result = MaxDepthReached
     else
-        result = COMPLETE
+        result = Finished
     end
 
-    return result, nv[], lowest_depth[]
+    return RSResult(result, nv[], lowest_depth[])
 end
 end

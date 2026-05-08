@@ -68,3 +68,17 @@ Base.copy(::CopyOnlyVertex) = CopyOnlyVertex()
     int_compare(a::Int, b::Int) = a == b
     @test_throws ArgumentError RSSystem(ls_oop, adj_oop, 1.0; compare=int_compare)
 end
+
+@testset "RSResult" begin
+    r = RSResult(Finished, 10, 5)
+    @test r.status == Finished
+    @test r.nvertices == 10
+    @test r.maxdepth == 5
+
+    @test RSResult(Finished, 10, 5) == RSResult(Finished, 10, 5)
+    @test RSResult(Finished, 10, 5) != RSResult(MaxVerticesReached, 10, 5)
+    @test RSResult(Finished, 10, 5) != RSResult(Finished, 99, 5)
+    @test RSResult(Finished, 10, 5) != RSResult(Finished, 10, 99)
+
+    @test repr(RSResult(MaxDepthReached, 7, 3)) == "RSResult(MaxDepthReached, nvertices=7, maxdepth=3)"
+end

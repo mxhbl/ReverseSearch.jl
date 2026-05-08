@@ -71,7 +71,7 @@ end
     maxdepth = n + sum(nmaxedges(i) for i in 1:n)
     
     # Compare against known number of graphs from https://oeis.org/A000088
-    result = (ReverseSearch.MAXDEPTHREACHED, 13599, maxdepth)
+    result = RSResult(MaxDepthReached, 13599, maxdepth)
 
     @test reversesearch(rsys1; maxdepth, threaded=false, cache=CacheAll()) == result
     @test reversesearch(rsys1; maxdepth, threaded=false, cache=CacheCounter()) == result
