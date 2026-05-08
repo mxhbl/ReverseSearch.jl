@@ -37,47 +37,54 @@ struct RSResult
     depth_reached::Int
 end
 
-Base.:(==)(a::RSResult, b::RSResult) =
-    a.status == b.status && a.nvertices == b.nvertices && a.depth_reached == b.depth_reached
-
-function Base.show(io::IO, r::RSResult)
-    print(io, "RSResult(", r.status, ", nvertices=", r.nvertices, ", depth_reached=", r.depth_reached, ")")
+function Base.:(==)(a::RSResult, b::RSResult)
+    return a.status == b.status && a.nvertices == b.nvertices && a.depth_reached == b.depth_reached
 end
 
+function Base.show(io::IO, r::RSResult)
+    return print(io, "RSResult(", r.status, ", nvertices=", r.nvertices, ", depth_reached=", r.depth_reached, ")")
+end
 
 """
     RSSystem(ls, adj, v₀; [compare, aux])
 
 An RSSystem defines a reverse-search enumeration procedure by specifying the local search function `ls(v)`, the
 adjacency oracle `adj(v, j, aux)`, a comparator function (defaults to `Base.:(==)`), and a starting vertex `v₀`.
-The enumeration can be carried out by calling [`reversesearch(::RSSystem)`](@ref), or by iterating over an [`RSIterator(::RSSystem)`](@ref).
+The enumeration can be carried out by calling [`reversesearch(::RSSystem)`](@ref), or by iterating over an
+[`RSIterator(::RSSystem)`](@ref).
 
 The local search and adjacency functions are expected to adhere to the following interfaces:
 
 - `u = ls(v)` maps an object `v` to its parent `u`, such that `adj(u, j, aux) == v` for some index `j`.
-    An in-place version of the form `u = ls!(w, v)` is also supported. This version must also return `u` and leave `v` untouched.
+    An in-place version of the form `u = ls!(w, v)` is also supported. This version must also return `u` and leave `v`
+    untouched.
 - `u = adj(v, j, aux)` maps an object `v` onto its `j`th neighbor `u`, optionally making use and/or modifying the
-    auxilary information stored in `aux`. In many applications, not all values for `j` will lead to a valid object, in which case 
-    `missing` should be returned. If all neighbors are exhausted, `nothing` must be returned. An in-place version of the form 
-    `u = adj!(w, v, j, aux)` is also supported. This version must also return `u` and leave `v` untouched.
+    auxilary information stored in `aux`.
+    In many applications, not all values of `j` will lead to a valid object, in which case `missing` must be returned.
+    If all neighbors are exhausted, `nothing` must be returned.
+    An in-place version of the form `u = adj!(w, v, j, aux)` is also supported.
+    This version must also return `u` and leave `v` untouched.
 
-Note that `ls` and `adj` need to either both be in-place, or both be out-of-place. If a function has methods for both signatures, the in-place version takes precedence.
+Note that `ls` and `adj` need to either both be in-place, or both be out-of-place.
+If a function has methods for both signatures, the in-place version takes precedence.
 
 The vertex type `V` (the type of `v₀`) must support the following operations:
 
 - `copy(v::V)`: always required.
 - `copy!(dst::V, src::V)`: required only if `ls` and `adj` operate in-place.
-- `compare(v1::V, v2::V)`: required when using a custom `compare` function. If no `compare` function is provided, the user must ensure that `==(v1::V, v2::V)` returns
-  meaningful results.
+- `compare(v1::V, v2::V)`: required when using a custom `compare` function.
+  If no `compare` function is provided, the user must ensure that `==(v1::V, v2::V)` returns meaningful results.
 
 !!! warning
-    For in-place operation, if `V` contains nested mutable data (e.g. arrays), `copy` must perform a deep copy. 
+    For in-place operation, if `V` contains nested mutable data (e.g. arrays), `copy` must perform a deep copy.
     A shallow copy may cause aliasing and lead to silent corruption.
 
-In some enumeration problems, especially when dealing with isomorphism-free generation, it can be convenient to pass additional information to the 
-adjacency oracle, for example to avoid generating isomorphic neighbors. `aux` can be used to pass the initial value of this auxilary data to the 
-adjacency oracle. If `aux` is defined, then at every object `v`, a new copy of `aux` is created and passed to the oracle as 
-`adj(v, 1, copy(aux))`. This copy can then be used and/or modified by `adj` while generating the neighbors of `v`.
+In some enumeration problems, especially when dealing with isomorphism-free generation, it can be convenient to pass
+additional information to the adjacency oracle, for example to avoid generating isomorphic neighbors.
+`aux` can be used to pass the initial value of this auxilary data to the adjacency oracle.
+If `aux` is defined, then at every object `v`, a new copy of `aux` is created and passed to the oracle as
+`adj(v, 1, copy(aux))`.
+This copy can then be used and/or modified by `adj` while generating the neighbors of `v`.
 """
 struct RSSystem{isinplace,LS,ADJ,COM,VTY,ATY}
     ls::LS              # local search, ls(v), returns v_prev
@@ -86,7 +93,7 @@ struct RSSystem{isinplace,LS,ADJ,COM,VTY,ATY}
     v₀::VTY             # starting vertex
     aux::ATY            # (optional) auxilary data
     function RSSystem{isinplace}(ls, adj, v₀; compare=Base.:(==), aux=nothing) where {isinplace}
-        return new{isinplace, typeof(ls), typeof(adj), typeof(compare), typeof(v₀), typeof(aux)}(ls, adj, compare, v₀, aux)
+        return new{isinplace,typeof(ls),typeof(adj),typeof(compare),typeof(v₀),typeof(aux)}(ls, adj, compare, v₀, aux)
     end
 end
 isinplace(::RSSystem{iip}) where {iip} = iip
@@ -96,13 +103,14 @@ function Base.show(io::IO, rsys::RSSystem{iip}) where {iip}
     isnothing(rsys.aux) || print(io, ", aux=", typeof(rsys.aux))
     rsys.compare === Base.:(==) || print(io, ", compare=", nameof(rsys.compare))
     print(io, ")")
+    return
 end
 
 function RSSystem(ls, adj, v₀; compare=Base.:(==), aux=nothing)
     VTY = typeof(v₀)
     ATY = typeof(aux)
 
-    ls_iip = if hasmethod(ls, Tuple{VTY, VTY})
+    ls_iip = if hasmethod(ls, Tuple{VTY,VTY})
         true
     elseif hasmethod(ls, Tuple{VTY})
         false
@@ -110,12 +118,16 @@ function RSSystem(ls, adj, v₀; compare=Base.:(==), aux=nothing)
         throw(ArgumentError("ls must accept `(w::$VTY, v::$VTY)` [in-place] or `(v::$VTY)` [out-of-place]."))
     end
 
-    adj_iip = if hasmethod(adj, Tuple{VTY, VTY, Int, ATY})
+    adj_iip = if hasmethod(adj, Tuple{VTY,VTY,Int,ATY})
         true
-    elseif hasmethod(adj, Tuple{VTY, Int, ATY})
+    elseif hasmethod(adj, Tuple{VTY,Int,ATY})
         false
     else
-        throw(ArgumentError("adj must accept `(w::$VTY, v::$VTY, j::Int, aux::$ATY)` [in-place] or `(v::$VTY, j::Int, aux::$ATY)` [out-of-place]."))
+        throw(
+            ArgumentError(
+                "adj must accept `(w::$VTY, v::$VTY, j::Int, aux::$ATY)` [in-place] or `(v::$VTY, j::Int, aux::$ATY)` [out-of-place].",
+            ),
+        )
     end
 
     if ls_iip != adj_iip
@@ -126,11 +138,11 @@ function RSSystem(ls, adj, v₀; compare=Base.:(==), aux=nothing)
         throw(ArgumentError("The vertex type $VTY must define `copy`."))
     end
 
-    if ls_iip && !hasmethod(copy!, Tuple{VTY, VTY})
+    if ls_iip && !hasmethod(copy!, Tuple{VTY,VTY})
         throw(ArgumentError("The vertex type $VTY must define `copy!` for in-place ls/adj."))
     end
 
-    if !hasmethod(compare, Tuple{VTY, VTY})
+    if !hasmethod(compare, Tuple{VTY,VTY})
         throw(ArgumentError("The comparator must accept two arguments of type $VTY."))
     end
 
@@ -157,7 +169,7 @@ function pushvertex!(counter::SimpleNeighborCounter, args...)
     if hasaux(counter)
         counter.aux = copy(counter.aux_init)
     end
-    return
+    return nothing
 end
 function popvertex!(counter::SimpleNeighborCounter, rsys::RSSystem{isinplace}, v, prev, temp=nothing) where {isinplace}
     counter.j = 1
@@ -175,7 +187,7 @@ function popvertex!(counter::SimpleNeighborCounter, rsys::RSSystem{isinplace}, v
         ismissing(next) && continue
         rsys.compare(next, v) && break
     end
-    return
+    return nothing
 end
 hasaux(::SimpleNeighborCounter) = true
 hasaux(::SimpleNeighborCounter{Nothing}) = false
@@ -195,26 +207,26 @@ function CachedNeighborCounter(; aux=nothing, v=nothing)
     return CachedNeighborCounter{typeof(aux),typeof(v)}([1], [a2], a1, [v])
 end
 increment!(counter::CachedNeighborCounter, Δj) = counter.js[end] += Δj
-function pushvertex!(counter::CachedNeighborCounter, v) 
+function pushvertex!(counter::CachedNeighborCounter, v)
     push!(counter.js, 1)
-    hasvertexcache(counter) && push!(counter.vs, copy(v)) #TODO this copy is redundant if the sytem is not inplace
+    hasvertexcache(counter) && push!(counter.vs, copy(v)) #TODO this copy is redundant if the system is not inplace
     hasaux(counter) && push!(counter.aux, copy(counter.aux_init))
-    return
+    return nothing
 end
 function popvertex!(counter::CachedNeighborCounter, args...)
     pop!(counter.js)
     hasaux(counter) && pop!(counter.aux)
-    if hasvertexcache(counter) 
+    if hasvertexcache(counter)
         pop!(counter.vs)
         return last(counter.vs)
     else
-        return
+        return nothing
     end
 end
 hasaux(::CachedNeighborCounter) = true
 hasaux(::CachedNeighborCounter{Nothing}) = false
 hasvertexcache(::CachedNeighborCounter) = true
-hasvertexcache(::CachedNeighborCounter{<:Any, Nothing}) = false
+hasvertexcache(::CachedNeighborCounter{<:Any,Nothing}) = false
 auxvalue(counter::CachedNeighborCounter) = counter.aux[end]
 countervalue(counter::CachedNeighborCounter) = counter.js[end]
 
@@ -231,7 +243,9 @@ function NeighborCounter(; cache::CacheMode, aux, v=nothing)
     elseif cache === CacheNothing()
         counter = SimpleNeighborCounter(; aux)
     else
-        throw(ArgumentError("Invalid cache mode. Valid options are `CacheNothing()`, `CacheCounter()`, and `CacheAll()`."))
+        throw(
+            ArgumentError("Invalid cache mode. Valid options are `CacheNothing()`, `CacheCounter()`, and `CacheAll()`.")
+        )
     end
     return counter
 end
@@ -251,7 +265,15 @@ end
 hasaux(state::RSState) = hasaux(state.counter)
 hasvertexcache(state::RSState) = hasvertexcache(state.counter)
 hascountercache(state::RSState) = state.counter isa CachedNeighborCounter
-cachemode(state::RSState) = hasvertexcache(state) ? CacheAll() : hascountercache(state) ? CacheCounter() : CacheNothing()
+function cachemode(state::RSState)
+    return if hasvertexcache(state)
+        CacheAll()
+    elseif hascountercache(state)
+        CacheCounter()
+    else
+        CacheNothing()
+    end
+end
 
 function forward_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isinplace}
     state.depth == 0 && return false
@@ -334,7 +356,8 @@ end
 """
     prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task)
 
-Low-level, parallel implementation of reverse-search. This function should rarely be called directly.
+Low-level, parallel implementation of reverse-search.
+This function should rarely be called directly.
 See [`reversesearch`](@ref) or [`RSIterator`](@ref) for user-friendly alternatives.
 """
 function prs(f, rsys::RSSystem, state::RSState; depth_per_task, verts_per_task)
@@ -375,14 +398,14 @@ function _rsworker(f, rsys::RSSystem, state, break_flag; depth_per_task, verts_p
 
     rs(fwrap, rsys, state)
     wait.(tasks)
-    return
+    return nothing
 end
 
 """
     RSIterator(rsys::RSSystem; cache=CacheAll(), maxdepth=Inf, copy_output=true)
 
-Create an iterable from the RSSystem `rsys` that makes it convenient to iterate
-over the objects generated by reverse-search, e.g. via
+Create an iterable from the RSSystem `rsys` that makes it convenient to iterate over the objects generated by
+reverse-search, e.g. via
 
 ```
 for (v, depth) in RSIterator(rsys)
@@ -390,18 +413,16 @@ for (v, depth) in RSIterator(rsys)
 end
 ```
 
-The iterator will generate all objects up to a depth of `maxdepth`. The `cache` keyword
-controls how much information is cached along the current search branch; see [`reversesearch`](@ref)
-for a description of the available options. For more fine-grained control over the enumeration
-process, use [`reversesearch`](@ref).
+The iterator will generate all objects up to a depth of `maxdepth`.
+The `cache` keyword controls how much information is cached along the current search branch;
+see [`reversesearch`](@ref) for a description of the available options.
+For more fine-grained control over the enumeration process, use [`reversesearch`](@ref).
 
-If `copy_output=false`, the iterator returns the internal vertex object without copying it. 
+If `copy_output=false`, the iterator returns the internal vertex object without copying it.
 In this case, the returned object is only valid until the next call to `iterate`.
 Storing or modifying the vertex object without copying leads to silent corruption and undefined results.
-
-!!! warning
-    Only set `copy_output=false` if you need to avoid allocations at all costs and you are certain that 
-    the vertex is not stored or modified outside the loop body.
+Only set `copy_output=false` if you need to avoid allocations at all costs and you are certain that the vertex is
+not stored or modified outside the loop body.
 
 !!! warning
     The iteration state is mutated in-place and should not be copied, stored, or reused across iterations.
@@ -412,7 +433,9 @@ struct RSIterator{RSYS<:RSSystem,CM<:CacheMode}
     maxdepth::Int
     copy_output::Bool
     function RSIterator(rsys::RSSystem; cache=CacheAll(), maxdepth=Inf, copy_output=true)
-        return new{typeof(rsys),typeof(cache)}(rsys, cache, isinf(maxdepth) ? typemax(Int) : round(Int, maxdepth), copy_output)
+        return new{typeof(rsys),typeof(cache)}(
+            rsys, cache, isinf(maxdepth) ? typemax(Int) : round(Int, maxdepth), copy_output
+        )
     end
 end
 
@@ -420,7 +443,7 @@ function Base.iterate(iter::RSIterator, state::RSState)
     if state.depth == iter.maxdepth
         forward_traverse!(state, iter.rsys) || return nothing
     end
-    notdone = rs((_...)->BREAK, iter.rsys, state)
+    notdone = rs((_...) -> BREAK, iter.rsys, state)
     if notdone
         return ((iter.copy_output ? copy(state.v) : state.v), state.depth), state
     else
@@ -433,28 +456,36 @@ function Base.iterate(iter::RSIterator)
 end
 
 Base.IteratorSize(::Type{<:RSIterator}) = Base.SizeUnknown()
-Base.eltype(::Type{<:RSIterator{<:RSSystem{isinplace,LS,ADJ,COM,VTY}}}) where {isinplace,LS,ADJ,COM,VTY} = Tuple{VTY,Int}
+function Base.eltype(::Type{<:RSIterator{<:RSSystem{isinplace,LS,ADJ,COM,VTY}}}) where {isinplace,LS,ADJ,COM,VTY}
+    return Tuple{VTY,Int}
+end
 
 """
     reversesearch([f], rsys::RSSystem; threaded=false, cache=CacheAll(), maxdepth=Inf, maxverts=Inf, kwargs...)
 
-Perform reverse-search enumeration using the adjacency oracle, local search, comparator, and starting vertex defined in `rsys`.
-During the enumeration, evaluate `f(v, depth)` on each object `v` generated at a certain `depth`. Stop the enumeration if a depth of 
-`maxdepth` is reached, if `maxverts` vertices have been generated, or if `f(v, depth)` returns the `BREAK` signal (see below).
+Perform reverse-search enumeration using the adjacency oracle, local search, comparator, and starting vertex defined in
+`rsys`.
+During the enumeration, evaluate `f(v, depth)` on each object `v` generated at a certain `depth`.
+Stop the enumeration if a depth of `maxdepth` is reached, if `maxverts` vertices have been generated, or if
+`f(v, depth)` returns the `BREAK` signal (see below).
 
-If `threaded=true`, the enumeration is performed in parallel and the following additional keyword arguments need to be set:
+If `threaded=true`, the enumeration is performed in parallel and the following additional keyword arguments need to be
+set:
 
 - `depth_per_task`: the maximal depth a single task will explore before terminating.
 - `verts_per_task`: the maximal number of vertices a single task will generate before terminating.
 
-The optimal values for `depth_per_task` and `verts_per_task` are highly problem-specific, there are no default values and some tuning is usually required 
-to achieve good performance.
+The optimal values for `depth_per_task` and `verts_per_task` are highly problem-specific; there are no default values
+and some tuning is usually required to achieve good performance.
 
-The `cache` keyword argument determines whether information along the current branch in the search tree should be cached, or if it needs to be 
-regenerated at each forward traverse. This should usually be left as `CacheAll()`, unless you are dealing with very large-scale enumerations or run into 
-memory issues. Valid options are:
+The `cache` keyword argument determines whether information along the current branch in the search tree should be
+cached, or if it needs to be regenerated at each forward traverse.
+This should usually be left as `CacheAll()`, unless you are dealing with very large-scale enumerations or run into 
+memory issues.
+Valid options are:
 
-- `CacheAll()`: cache all vertices and neighborcounters along the current search branch. Fast, but may lead to heavy memory use if the search tree is very deep.
+- `CacheAll()`: cache all vertices and neighborcounters along the current search branch.
+  Fast, but may lead to heavy memory use if the search tree is very deep.
 - `CacheCounter()`: cache only the neighborcounters, but regenerate vertices at each forward traverse.
 - `CacheNothing()`: do not cache anything. Slowest, but most memory-saving option.
 
@@ -463,19 +494,24 @@ The optional function `f` can be used to both process the generated objects and 
 `f` must return one of three signals:
 
 - `ACCEPT` (or `true`): reverse-search continues as normal.
-- `REJECT` (or `false`): the offspring of the current object will not be generated and the enumeration continues from the parent of the current object.
+- `REJECT` (or `false`): the offspring of the current object will not be generated and the enumeration continues from
+  the parent of the current object.
 - `BREAK`: the enumeration terminates immediately.
 
-!!! warning "Warning"
+!!! warning
 
-    If `threaded=true`, `f` will be called from different threads. It is your responsibility to ensure that `f` is thread-safe.
+    If `threaded=true`, `f` will be called from different threads. It is your responsibility to ensure that `f` is
+    thread-safe.
 
 !!! note
 
-    The offspring of rejected objects are not generated. This may cause unexpected results if `f` would a accept an object whose parent it rejected.
-    As a general rule, rejection should be based on properties that are "inherited", so that rejection of a parent implies rejection of all its offspring.
+    The offspring of rejected objects are not generated. This may cause unexpected results if `f` would a accept an
+    object whose parent it rejected.
+    As a general rule, rejection should be based on properties that are "inherited", so that rejection of a parent
+    implies rejection of all its offspring.
 
-Returns an [`RSResult`](@ref) with the final status of the enumeration, the total number of generated vertices, and the deepest depth reached.
+Returns an [`RSResult`](@ref) with the final status of the enumeration, the total number of generated vertices, and the
+deepest depth reached.
 """
 function reversesearch(f, rsys::RSSystem; threaded=false, cache=CacheAll(), kwargs...)
     state = RSState(rsys; cache)
@@ -483,7 +519,9 @@ function reversesearch(f, rsys::RSSystem; threaded=false, cache=CacheAll(), kwar
 end
 reversesearch(rsys::RSSystem; kwargs...) = reversesearch(nothing, rsys; kwargs...)
 
-function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, kwargs...) where {threaded}
+function _reversesearch(
+    f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, kwargs...
+) where {threaded}
     hasf = !isnothing(f)
 
     maxdepth_flag = Threads.Atomic{Bool}(false)
@@ -519,7 +557,7 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
     end
 
     if maxvert_flag[]
-        result = MaxVerticesReached 
+        result = MaxVerticesReached
     elseif break_flag
         result = BreakTriggered
     elseif maxdepth_flag[]
