@@ -92,6 +92,18 @@ function testall(G, nv=nothing, depth=nothing; maxverts=Inf, maxdepth=Inf, testc
     return
 end
 
+@testset "RSIterator" begin
+    G = star_graph(5)
+    ls, adj = subgraphsearch(G)
+    rsys = RSSystem(ls, adj, Int[])
+
+    verts_copy = [(copy(v), d) for (v, d) in RSIterator(rsys; copy_output=true)]
+    verts_nocopy = [(copy(v), d) for (v, d) in RSIterator(rsys; copy_output=false)]
+    @test verts_copy == verts_nocopy
+
+    verts_copy_noaliased = [v for (v, d) in RSIterator(rsys; copy_output=true)]
+    @test !any(==(verts_copy_noaliased[1]), verts_copy_noaliased[2:end])
+end
 
 @testset "subgraphs" begin
     G = path_graph(32)
