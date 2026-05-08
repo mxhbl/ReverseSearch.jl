@@ -91,6 +91,13 @@ struct RSSystem{isinplace,LS,ADJ,COM,VTY,ATY}
 end
 isinplace(::RSSystem{iip}) where {iip} = iip
 
+function Base.show(io::IO, rsys::RSSystem{iip}) where {iip}
+    print(io, "RSSystem{", iip ? "inplace" : "!inplace", "}(V=", typeof(rsys.v₀))
+    isnothing(rsys.aux) || print(io, ", aux=", typeof(rsys.aux))
+    rsys.compare === Base.:(==) || print(io, ", compare=", nameof(rsys.compare))
+    print(io, ")")
+end
+
 function RSSystem(ls, adj, v₀; compare=Base.:(==), aux=nothing)
     VTY = typeof(v₀)
     ATY = typeof(aux)
