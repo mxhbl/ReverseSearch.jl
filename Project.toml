@@ -1,7 +1,7 @@
 name = "ReverseSearch"
 uuid = "4c89c464-f98c-4bab-a6f2-360512b03a4e"
 authors = ["Maximilian Hübl <maximilian.huebl@ist.ac.at>"]
-version = "0.2.1"
+version = "0.2.2"
 
 [compat]
 julia = "1.10"
