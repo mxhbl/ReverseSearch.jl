@@ -300,7 +300,7 @@ end
 Low-level reverse-search function that should rarely be called directly.
 See [`reversesearch`](@ref) or [`RSIterator`](@ref) for user-friendly alternatives.
 """
-function rs(f, rsys::RSSystem, state::RSState; kwargs...)
+function rs(f, rsys::RSSystem, state::RSState)
     break_flag = false
 
     while true
@@ -423,12 +423,12 @@ Base.eltype(::Type{<:RSIterator{<:RSSystem{isinplace,LS,ADJ,COM,VTY}}}) where {i
 
 Perform reverse-search enumeration using the adjacency oracle, local search, comparator, and starting vertex defined in `rsys`.
 During the enumeration, evaluate `f(v, depth)` on each object `v` generated at a certain `depth`. Stop the enumeration if a depth of 
-`maxdepth` is reached, if `maxverts` objects have been generated, or if `f(v, depth)` returns the `BREAK` signal (see below).
+`maxdepth` is reached, if `maxverts` vertices have been generated, or if `f(v, depth)` returns the `BREAK` signal (see below).
 
 If `threaded=true`, the enumeration is performed in parallel and the following additional keyword arguments need to be set:
 
 - `depth_per_task`: the maximal depth a single task will explore before terminating.
-- `verts_per_task`: the maximal number of objects a single task will generate before terminating.
+- `verts_per_task`: the maximal number of vertices a single task will generate before terminating.
 
 The optimal values for `depth_per_task` and `verts_per_task` are highly problem-specific, there are no default values and some tuning is usually required 
 to achieve good performance.
@@ -469,18 +469,13 @@ reversesearch(rsys::RSSystem; kwargs...) = reversesearch(nothing, rsys; kwargs..
 function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, kwargs...) where {threaded}
     hasf = !isnothing(f)
 
-    maxdepth_flag = threaded ? Threads.Atomic{Bool}(false) : Ref(false)
-    maxvert_flag = threaded ? Threads.Atomic{Bool}(false) : Ref(false)
-
-    nv = threaded ? Threads.Atomic{Int}(1) : Ref(1)
-    depth_reached = threaded ? Threads.Atomic{Int}(1) : Ref(1)
+    maxdepth_flag = Threads.Atomic{Bool}(false)
+    maxvert_flag = Threads.Atomic{Bool}(false)
+    nv = Threads.Atomic{Int}(1)
+    depth_reached = Threads.Atomic{Int}(1)
 
     function fwrap(v, depth)
-        if threaded
-            Threads.atomic_or!(maxvert_flag, nv[] >= maxverts)
-        else
-            maxvert_flag[] = maxvert_flag[] || nv[] >= maxverts
-        end
+        Threads.atomic_or!(maxvert_flag, nv[] >= maxverts)
 
         if maxvert_flag[]
             signal = BREAK
@@ -489,13 +484,8 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
         end
 
         if signal == ACCEPT
-            if threaded
-                Threads.atomic_add!(nv, 1)
-                Threads.atomic_max!(depth_reached, depth)
-            else
-                nv[] += 1
-                depth_reached[] = max(depth_reached[], depth)
-            end
+            Threads.atomic_add!(nv, 1)
+            Threads.atomic_max!(depth_reached, depth)
             if depth == maxdepth
                 signal = REJECT
                 maxdepth_flag[] = true
@@ -505,8 +495,11 @@ function _reversesearch(f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxd
         return signal
     end
 
-    rs_fn = threaded ? prs : rs
-    break_flag = rs_fn(fwrap, rsys, state; kwargs...)
+    break_flag = if threaded
+        prs(fwrap, rsys, state; kwargs...)
+    else
+        rs(fwrap, rsys, state)
+    end
 
     if maxvert_flag[]
         result = MaxVerticesReached 

@@ -60,7 +60,7 @@ function nonisomorphicsearch()
     return ls, adj, ls!, adj!
 end
 
-@testset begin "nonisomorphic graphs"
+@testset "isographs" begin
     ls, adj, ls!, adj! = nonisomorphicsearch()
     rsys1 = RSSystem(ls!, adj!, NautyGraph(0), aux=NautyGraph[])
     rsys2 = RSSystem(ls, adj, NautyGraph(0), aux=NautyGraph[])
