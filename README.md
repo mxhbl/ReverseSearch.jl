@@ -46,10 +46,15 @@ Here we start the enumeration from the empty subgraph (`v0 = Int[]`).
 
 Once the reverse search system is defined, we can carry out the enumeration using
 ```julia
-f(v, d) = (println("Found a subgraph with vertices $v at depth $d."); true)
-result, nv, maxdepth = reversesearch(f, rsys)
+result = reversesearch(rsys) do v, d
+    println("Found a subgraph with vertices $v at depth $d.")
+    true
+end
 ```
-The code above will perform the complete enumeration and call the function `f(v, d)` on every object `v` found at depth `d`. In the present example, depth is just the number of vertices of the induced subgraph. Through the function `f`, it is also possible to reject some of the generated objects -- see the docstring of `reversesearch` for details.
+The code above will perform the complete enumeration and call the callback on every object `v` found at depth `d`.
+In the present example, depth is just the number of vertices of the induced subgraph.
+`reversesearch` returns an `RSResult` containing the termination status, total number of vertices generated, and the maximum depth reached.
+Through the callback, it is also possible to reject some of the generated objects — see the docstring of `reversesearch` for details.
 
 There is also a simpler, but more limited, alternative to the `reversesearch` function: Constructing an `RSIterator` makes it possible iterate over the reverse search output, for example with a `for` loop.
 ```julia
@@ -57,3 +62,9 @@ for (v, d) in RSIterator(rsys)
     println("Found a subgraph with vertices $v at depth $d.")
 end
 ```
+
+## References
+
+  - Avis, D. & Fukuda, K. Reverse search for enumeration.
+    *Discrete Applied Mathematics*, **65**, 21-46 (1996).
+    [doi:10.1016/0166-218x(95)00026-n](https://doi.org/10.1016/0166-218x(95)00026-n)
