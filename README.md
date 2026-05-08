@@ -2,10 +2,10 @@
 [![CI](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/mxhbl/ReverseSearch.jl/actions/workflows/CI.yml)
 [![Coverage](https://codecov.io/gh/mxhbl/ReverseSearch.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/mxhbl/ReverseSearch.jl)
 
-This is a pure Julia implementation of the [reverse search](https://en.wikipedia.org/wiki/Reverse-search_algorithm) algorithm for combinatorial enumeration and search problems.
+This is a pure Julia implementation of the [reverse search](https://en.wikipedia.org/wiki/Reverse-search_algorithm) algorithm for combinatorial enumeration and search problems, originally introduced by Avis and Fukuda (see [References](#references)).
 
 ## Example usage
-Before using this package, it is recommended to read the original reverse search [paper](https://doi.org/10.1016/0166-218X(95)00026-N) by Avis and Fukuda.
+Before using this package, it is recommended to read the original reverse search [paper](#references), which explains the concepts needed below.
 To specify an enumeration procedure, you need to provide a local search function `ls(v)` and an adjacency oracle `adj(v, j, aux)`. For example, to enumerate all connected induced subgraphs of a graph `G`, one could use
 ```julia
 using ReverseSearch, Graphs
