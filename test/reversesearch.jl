@@ -86,6 +86,18 @@ end
     @test state_iip._temp1 isa Vector{Int}
     @test state_iip._temp2 isa Vector{Int}
     @test state_iip._temp1 !== state_iip._temp2
+
+    ls_oop(x::Vector{Int}) = x
+    adj_oop(x::Vector{Int}, j, aux) = x
+    ls_iip(x::Vector{Int}, y::Vector{Int}) = x
+    adj_iip(x::Vector{Int}, y::Vector{Int}, j, aux) = x
+    my_compare(a::Vector{Int}, b::Vector{Int}) = a == b
+
+    @test repr(RSSystem(ls_oop, adj_oop, Int[]))                          == "RSSystem{!iip}(V=Vector{Int64})"
+    @test repr(RSSystem(ls_iip, adj_iip, Int[]))                          == "RSSystem{iip}(V=Vector{Int64})"
+    @test repr(RSSystem(ls_oop, adj_oop, Int[]; aux=Int[]))               == "RSSystem{!iip}(V=Vector{Int64}, aux=Vector{Int64})"
+    @test repr(RSSystem(ls_oop, adj_oop, Int[]; compare=my_compare))      == "RSSystem{!iip}(V=Vector{Int64}, compare=my_compare)"
+    @test repr(RSSystem(ls_oop, adj_oop, Int[]; aux=Int[], compare=my_compare)) == "RSSystem{!iip}(V=Vector{Int64}, aux=Vector{Int64}, compare=my_compare)"
 end
 
 @testset "RSResult" begin
