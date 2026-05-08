@@ -38,7 +38,6 @@ Base.copy(::CopyOnlyVertex) = CopyOnlyVertex()
                       (ls_typed_oop, adj_typed_oop),
                       (ls_aux_oop,   adj_aux_oop),
                       (ls_varargs,   adj_varargs)]
-        println("he")
         @test (RSSystem(ls, adj, v); true)
     end
 
