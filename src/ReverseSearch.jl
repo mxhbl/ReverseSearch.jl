@@ -13,7 +13,7 @@ const BREAK = -1
 """
     @enum RSStatus
 
-Status code returned as the first element of the `reversesearch` result tuple.
+Status code in the [`RSResult`](@ref) returned by [`reversesearch`](@ref).
 
   - `Finished`: the enumeration finished without hitting any limit.
   - `MaxVerticesReached`: stopped because the `maxverts` limit was reached.
@@ -25,7 +25,7 @@ Status code returned as the first element of the `reversesearch` result tuple.
 """
     RSResult(status, nvertices, depth_reached)
 
-Result returned by `reversesearch`, with fields:
+Result returned by [`reversesearch`](@ref), with fields:
 
   - `status::RSStatus`: the reason the enumeration terminated.
   - `nvertices::Int`: the total number of vertices generated.
@@ -475,7 +475,7 @@ The optional function `f` can be used to both process the generated objects and 
     The offspring of rejected objects are not generated. This may cause unexpected results if `f` would a accept an object whose parent it rejected.
     As a general rule, rejection should be based on properties that are "inherited", so that rejection of a parent implies rejection of all its offspring.
 
-The return value contains the final status of the enumeration, the number of generated vertices, and the lowest depth reached.
+Returns an [`RSResult`](@ref) with the final status of the enumeration, the total number of generated vertices, and the deepest depth reached.
 """
 function reversesearch(f, rsys::RSSystem; threaded=false, cache=CacheAll(), kwargs...)
     state = RSState(rsys; cache)
