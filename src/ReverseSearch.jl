@@ -28,6 +28,17 @@ The local search and adjacency functions are expected to adhere to the following
 
 Note that `ls` and `adj` need to either both be in-place, or both be out-of-place.
 
+The vertex type `V` (the type of `v₀`) must support the following operations:
+
+- `copy(v::V)`: always required.
+- `copy!(dst::V, src::V)`: required only if `ls` and `adj` operate in-place.
+- `compare(v1::V, v2::V)`: required when using a custom `compare` function. If no `compare` function is provided, the user must ensure that `==(v1::V, v2::V)` returns
+  meaningful results.
+
+!!! warning
+    For in-place operation, if `V` contains nested mutable data (e.g. arrays), `copy` must perform a deep copy. 
+    A shallow copy may cause aliasing and lead to silent corruption.
+
 In some enumeration problems, especially when dealing with isomorphism-free generation, it can be convenient to pass additional information to the 
 adjacency oracle, for example to avoid generating isomorphic neighbors. `aux` can be used to pass the initial value of this auxilary data to the 
 adjacency oracle. If `aux` is defined, then at every object `v`, a new copy of `aux` is created and passed to the oracle as 
@@ -57,16 +68,28 @@ function RSSystem(ls, adj, v₀; compare=Base.:(==), aux=nothing)
         throw(ArgumentError("ls must accept `(w::$VTY, v::$VTY)` [in-place] or `(v::$VTY)` [out-of-place]."))
     end
 
-    adj_iip = if hasmethod(adj, Tuple{VTY, VTY, Integer, ATY})
+    adj_iip = if hasmethod(adj, Tuple{VTY, VTY, Int, ATY})
         true
-    elseif hasmethod(adj, Tuple{VTY, Integer, ATY})
+    elseif hasmethod(adj, Tuple{VTY, Int, ATY})
         false
     else
-        throw(ArgumentError("adj must accept `(w::$VTY, v::$VTY, j::Integer, aux::$ATY)`` [in-place] or `(v::$VTY, j::Integer, aux::$ATY)` [out-of-place]."))
+        throw(ArgumentError("adj must accept `(w::$VTY, v::$VTY, j::Int, aux::$ATY)`` [in-place] or `(v::$VTY, j::Int, aux::$ATY)` [out-of-place]."))
     end
 
     if ls_iip != adj_iip
         throw(ArgumentError("ls and adj must both be in-place or both be out-of-place."))
+    end
+
+    if !hasmethod(copy, Tuple{VTY})
+        throw(ArgumentError("The vertex type $VTY must define `copy`."))
+    end
+
+    if ls_iip && !hasmethod(copy!, Tuple{VTY, VTY})
+        throw(ArgumentError("The vertex type $VTY must define `copy!` for in-place ls/adj."))
+    end
+
+    if !hasmethod(compare, Tuple{VTY, VTY})
+        throw(ArgumentError("The comparator must accept two arguments of type $VTY."))
     end
 
     return RSSystem{ls_iip}(ls, adj, v₀; compare, aux)
