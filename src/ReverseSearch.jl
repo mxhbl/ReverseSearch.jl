@@ -441,6 +441,12 @@ not stored or modified outside the loop body.
 
 !!! warning
     The iteration state is mutated in-place and should not be copied, stored, or reused across iterations.
+
+## References
+
+  - Avis, D. & Fukuda, K. Reverse search for enumeration.
+    *Discrete Applied Mathematics*, **65**, 21-46 (1996).
+    [doi:10.1016/0166-218x(95)00026-n](https://doi.org/10.1016/0166-218x(95)00026-n)
 """
 struct RSIterator{RSYS<:RSSystem,CM<:CacheMode}
     rsys::RSYS
