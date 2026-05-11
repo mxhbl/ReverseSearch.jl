@@ -6,6 +6,7 @@ A Julia package for reverse search enumeration.
 Reverse search is a general technique for enumerating all elements of a set without duplication, using only a local
 search oracle and an adjacency oracle.
 See [`reversesearch`](@ref) and [`RSIterator`](@ref) for the main entry points.
+
 ## References
 
   - Avis, D. & Fukuda, K. Reverse search for enumeration.
@@ -440,6 +441,7 @@ not stored or modified outside the loop body.
 
 !!! warning
     The iteration state is mutated in-place and should not be copied, stored, or reused across iterations.
+
 ## References
 
   - Avis, D. & Fukuda, K. Reverse search for enumeration.
@@ -531,6 +533,7 @@ The optional function `f` can be used to both process the generated objects and 
 
 Returns an [`RSResult`](@ref) with the final status of the enumeration, the total number of generated vertices, and the
 deepest depth reached.
+
 ## References
 
   - Avis, D. & Fukuda, K. Reverse search for enumeration.
