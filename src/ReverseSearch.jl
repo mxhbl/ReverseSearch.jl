@@ -222,9 +222,9 @@ function CachedNeighborCounter(; aux=nothing, v=nothing)
     return CachedNeighborCounter{typeof(aux),typeof(v)}([1], [a2], a1, [v])
 end
 increment!(counter::CachedNeighborCounter, Δj) = counter.js[end] += Δj
-function pushvertex!(counter::CachedNeighborCounter, v)
+function pushvertex!(counter::CachedNeighborCounter, v, isinplace, args...)
     push!(counter.js, 1)
-    hasvertexcache(counter) && push!(counter.vs, copy(v)) #TODO this copy is redundant if the system is not inplace
+    hasvertexcache(counter) && push!(counter.vs, isinplace ? copy(v) : v)
     hasaux(counter) && push!(counter.aux, copy(counter.aux_init))
     return nothing
 end
@@ -334,7 +334,7 @@ function reverse_traverse!(state::RSState, rsys::RSSystem{isinplace}) where {isi
         end
 
         state.depth += 1
-        pushvertex!(state.counter, state.v)
+        pushvertex!(state.counter, state.v, isinplace)
         return true
     end
 end
@@ -460,7 +460,7 @@ struct RSIterator{RSYS<:RSSystem,CM<:CacheMode}
     end
 end
 
-function Base.iterate(iter::RSIterator, state::RSState)
+@inline function Base.iterate(iter::RSIterator, state::RSState)
     if state.depth == iter.maxdepth
         forward_traverse!(state, iter.rsys) || return nothing
     end
@@ -471,7 +471,7 @@ function Base.iterate(iter::RSIterator, state::RSState)
         return nothing
     end
 end
-function Base.iterate(iter::RSIterator)
+@inline function Base.iterate(iter::RSIterator)
     state = RSState(iter.rsys; cache=iter.cachemode)
     return ((iter.copy_output ? copy(state.v) : state.v), state.depth), state
 end
