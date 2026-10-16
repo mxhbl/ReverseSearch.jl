@@ -146,3 +146,53 @@ end
     G = star_graph(50)
     testall(G, 1794; maxverts=1794, parallel_nv=nothing, result=ReverseSearch.MaxVerticesReached)
 end
+
+@testset "limits" begin
+    G = complete_graph(5)
+    ls, adj = subgraphsearch(G)
+    rsys = RSSystem(ls, adj, Int[])
+
+    # maxdepth=0: only the starting vertex is generated, in every mode
+    testall(G, 1, 0; maxdepth=0, result=ReverseSearch.MaxDepthReached)
+    @test collect(RSIterator(rsys; maxdepth=0)) == [(Int[], 0)]
+    @test reversesearch(rsys; maxdepth=0) == RSResult(MaxDepthReached, 1, 0)
+    @test reversesearch(rsys; threaded=true, depth_per_task=1, verts_per_task=1, maxdepth=0) == RSResult(MaxDepthReached, 1, 0)
+
+    # maxdepth=1: the starting vertex and its children
+    testall(G, 6, 1; maxdepth=1, result=ReverseSearch.MaxDepthReached)
+
+    # maxverts=1: only the starting vertex is generated, in every mode
+    testall(G, 1, 0; maxverts=1, result=ReverseSearch.MaxVerticesReached)
+    @test reversesearch(rsys; maxverts=1) == RSResult(MaxVerticesReached, 1, 0)
+    @test reversesearch(rsys; threaded=true, depth_per_task=1, verts_per_task=1, maxverts=1) == RSResult(MaxVerticesReached, 1, 0)
+    @test reversesearch(rsys; maxverts=2) == RSResult(MaxVerticesReached, 2, 1)
+
+    # f is not called when the search stops at the starting vertex
+    ncalls = Ref(0)
+    r = reversesearch(rsys; maxdepth=0) do v, depth
+        ncalls[] += 1
+        return ACCEPT
+    end
+    @test r == RSResult(MaxDepthReached, 1, 0)
+    @test ncalls[] == 0
+
+    # negative maxdepth is rejected
+    @test_throws ArgumentError reversesearch(rsys; maxdepth=-1)
+    @test_throws ArgumentError reversesearch(rsys; threaded=true, depth_per_task=1, verts_per_task=1, maxdepth=-1)
+    @test_throws ArgumentError RSIterator(rsys; maxdepth=-1)
+
+    # maxverts below 1 is rejected, since the starting vertex is always generated
+    @test_throws ArgumentError reversesearch(rsys; maxverts=0)
+    @test_throws ArgumentError reversesearch(rsys; maxverts=-1)
+    @test_throws ArgumentError reversesearch(rsys; threaded=true, depth_per_task=1, verts_per_task=1, maxverts=0)
+
+    # starting vertex without children: the enumeration finishes at depth 0
+    G0 = SimpleGraph(0)
+    ls0, adj0 = subgraphsearch(G0)
+    rsys0 = RSSystem(ls0, adj0, Int[])
+    testall(G0, 1, 0)
+    testall(G0, 1, 0; maxdepth=0, result=ReverseSearch.MaxDepthReached)
+    testall(G0, 1, 0; maxverts=1, result=ReverseSearch.Finished)
+    @test collect(RSIterator(rsys0)) == [(Int[], 0)]
+    @test collect(RSIterator(rsys0; maxdepth=0)) == [(Int[], 0)]
+end

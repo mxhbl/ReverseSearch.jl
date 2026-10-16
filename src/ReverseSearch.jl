@@ -454,6 +454,7 @@ struct RSIterator{RSYS<:RSSystem,CM<:CacheMode}
     maxdepth::Int
     copy_output::Bool
     function RSIterator(rsys::RSSystem; cache=CacheAll(), maxdepth=Inf, copy_output=true)
+        _checkmaxdepth(maxdepth)
         return new{typeof(rsys),typeof(cache)}(
             rsys, cache, isinf(maxdepth) ? typemax(Int) : round(Int, maxdepth), copy_output
         )
@@ -550,11 +551,13 @@ function _reversesearch(
     f, rsys::RSSystem, state::RSState, ::Val{threaded}; maxdepth=Inf, maxverts=Inf, kwargs...
 ) where {threaded}
     hasf = !isnothing(f)
+    _checkmaxdepth(maxdepth)
+    _checkmaxverts(maxverts)
 
     maxdepth_flag = Threads.Atomic{Bool}(false)
     maxvert_flag = Threads.Atomic{Bool}(false)
     nv = Threads.Atomic{Int}(1)
-    depth_reached = Threads.Atomic{Int}(1)
+    depth_reached = Threads.Atomic{Int}(state.depth)
 
     function fwrap(v, depth)
         Threads.atomic_or!(maxvert_flag, nv[] >= maxverts)
@@ -577,7 +580,11 @@ function _reversesearch(
         return signal
     end
 
-    break_flag = if threaded
+    # The start vertex is never passed to fwrap, so its depth limit must be checked here.
+    break_flag = if state.depth >= maxdepth
+        maxdepth_flag[] = true
+        false
+    elseif threaded
         prs(fwrap, rsys, state; kwargs...)
     else
         rs(fwrap, rsys, state)
@@ -594,5 +601,15 @@ function _reversesearch(
     end
 
     return RSResult(result, nv[], depth_reached[])
+end
+
+function _checkmaxdepth(maxdepth)
+    maxdepth < 0 && throw(ArgumentError("`maxdepth` must be nonnegative."))
+    return
+end
+
+function _checkmaxverts(maxverts)
+    maxverts < 1 && throw(ArgumentError("`maxverts` must be at least 1."))
+    return
 end
 end
